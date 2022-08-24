@@ -156,5 +156,74 @@ void SetTensorToVariable(const Variable &in_var,
   }
 }
 
+void TransformData(const Tensor &input_tensor,
+                   const paddle::platform::Place &dst_place,
+                   Tensor *output_tensor) {
+  Tensor in;
+  in.ShareDataWith(input_tensor);
+  Tensor out;
+  TensorCopySync(in, dst_place, &out);
+  out.set_meta(in.meta());
+  PassTensorData(&out, &in);
+
+  // get output data
+  output_tensor->ShareDataWith(in);
+}
+
+void CopyVoidVariable(const Variable &in_var, Variable *out_var) {
+  if (in_var.IsType<LoDTensor>()) {
+    auto &in_lod_tensor = in_var.DebugGet<LoDTensor>();
+    auto *tran_lod_tensor = out_var->GetMutable<LoDTensor>();
+    tran_lod_tensor->set_lod(in_lod_tensor.lod());
+    tran_lod_tensor->set_layout(in_lod_tensor.layout());
+    tran_lod_tensor->set_meta(in_lod_tensor.meta());
+#ifdef PADDLE_WITH_MKLDNN
+    tran_lod_tensor->set_mem_desc(in_lod_tensor.mem_desc());
+#endif
+    // tran_lod_tensor->ShareDataWith(in_lod_tensor);
+  } else if (in_var.IsType<phi::SelectedRows>()) {
+    auto &in_selected_rows = in_var.DebugGet<phi::SelectedRows>();
+    auto *trans_selected_rows = out_var->GetMutable<phi::SelectedRows>();
+    trans_selected_rows->set_height(in_selected_rows.height());
+    trans_selected_rows->set_rows(in_selected_rows.rows());
+    trans_selected_rows->mutable_value()->set_meta(
+        in_selected_rows.value().meta());
+    // trans_selected_rows->mutable_value()->ShareDataWith(in_selected_rows.value());
+  } else {
+    PADDLE_THROW(platform::errors::Unavailable(
+        "Unsupported variable type, only supports LoDTensor or SelectedRows, "
+        "but the input variable type is %s.",
+        ToTypeName(in_var.Type())));
+  }
+}
+
+void SetVoidVariableDebug(Variable *in_var) {
+  if (in_var->IsType<LoDTensor>()) {
+    auto &in_lod_tensor = in_var->Get<LoDTensor>();
+    auto *tran_lod_tensor = in_var->DebugGetMutable<LoDTensor>();
+    // tran_lod_tensor->set_lod(in_lod_tensor.lod());
+    // tran_lod_tensor->set_layout(in_lod_tensor.layout());
+    tran_lod_tensor->set_meta(in_lod_tensor.meta());
+#ifdef PADDLE_WITH_MKLDNN
+    tran_lod_tensor->set_mem_desc(in_lod_tensor.mem_desc());
+#endif
+    // tran_lod_tensor->ShareDataWith(in_lod_tensor);
+  } else if (in_var->IsType<phi::SelectedRows>()) {
+    auto &in_selected_rows = in_var->Get<phi::SelectedRows>();
+    auto *trans_selected_rows = in_var->DebugGetMutable<phi::SelectedRows>();
+    trans_selected_rows->set_height(in_selected_rows.height());
+    trans_selected_rows->set_rows(in_selected_rows.rows());
+    // trans_selected_rows->mutable_value()->ShareDataWith(in_selected_rows);
+    // in_selected_rows.mutable_value();
+    trans_selected_rows->mutable_value()->set_meta(
+        in_selected_rows.value().meta());
+  } else {
+    PADDLE_THROW(platform::errors::Unavailable(
+        "Unsupported variable type, only supports LoDTensor or SelectedRows, "
+        "but the input variable type is %s.",
+        ToTypeName(in_var->Type())));
+  }
+}
+
 }  // namespace framework
 }  // namespace paddle

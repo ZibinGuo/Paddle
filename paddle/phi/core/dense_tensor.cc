@@ -14,6 +14,7 @@ limitations under the License. */
 
 #include "paddle/phi/core/dense_tensor.h"
 
+#include "paddle/fluid/platform/device/device_wrapper.h"
 #include "paddle/phi/common/bfloat16.h"
 #include "paddle/phi/common/complex.h"
 #include "paddle/phi/common/float16.h"
@@ -110,6 +111,7 @@ void* DenseTensor::AllocateFrom(Allocator* allocator,
   }
 
   size_t bytes = numel() * SizeOf(this->dtype());
+  // std::cout << "bytes = " << bytes << std::endl;
 
   if (fake_alloc) {
     bytes = 0;
@@ -186,6 +188,112 @@ void* DenseTensor::data() {
           "The storage must be valid when call the data function."));
   return reinterpret_cast<void*>(reinterpret_cast<uintptr_t>(holder_->ptr()) +
                                  meta_.offset);
+}
+
+float DenseTensor::checksum() const {
+  if (!this->initialized()) {
+    return 0;
+  }
+  float result = 0;
+  if (this->dtype() == paddle::experimental::CppTypeToDataType<float>::Type()) {
+    float* val = const_cast<float*>(data<float>());
+    if (paddle::platform::is_xpu_place(this->place())) {
+      val = new float[this->numel()];
+      xpu_wait();
+      xpu_memcpy(
+          val, data(), this->numel() * sizeof(float), XPU_DEVICE_TO_HOST);
+    }
+    for (int i = 0; i < this->numel(); i++) {
+      result += val[i];
+    }
+    if (paddle::platform::is_xpu_place(this->place())) {
+      delete[] val;
+    }
+  }
+  // ToDo: only support float now
+  return result;
+}
+
+double DenseTensor::checkmean() const {
+  if (!this->initialized()) {
+    return 0;
+  }
+  double result = 0.0;
+  if (this->dtype() == paddle::experimental::CppTypeToDataType<float>::Type()) {
+    float* val = const_cast<float*>(data<float>());
+    if (paddle::platform::is_xpu_place(this->place())) {
+      val = new float[this->numel()];
+      xpu_wait();
+      xpu_memcpy(
+          val, data(), this->numel() * sizeof(float), XPU_DEVICE_TO_HOST);
+    }
+    for (int i = 0; i < this->numel(); i++) {
+      result += (static_cast<double>(val[i]) / this->numel());
+    }
+    if (paddle::platform::is_xpu_place(this->place())) {
+      delete[] val;
+    }
+  }
+  // ToDo: only support float now
+  return result;
+}
+
+template <typename T>
+double DenseTensor::check_mse_impl(const DenseTensor& b) const {
+  double result = 0.0;
+  T* val = const_cast<T*>(data<T>());
+  T* val_cpu = const_cast<T*>(b.data<T>());
+  VLOG(10) << "dev1_place: " << this->place() << ", dev1_addr: " << data()
+           << ", dev1_numel: " << this->numel();
+
+  VLOG(10) << "dev2_place: " << b.place() << ", dev2_addr: " << b.data()
+           << ", dev2_numel: " << b.numel();
+  if (paddle::platform::is_xpu_place(this->place())) {
+    val = new T[this->numel()];
+    xpu_wait();
+    xpu_memcpy(val, data(), this->numel() * sizeof(T), XPU_DEVICE_TO_HOST);
+  }
+
+  if (paddle::platform::is_xpu_place(b.place())) {
+    val_cpu = new T[this->numel()];
+    xpu_wait();
+    xpu_memcpy(val_cpu, b.data(), b.numel() * sizeof(T), XPU_DEVICE_TO_HOST);
+  }
+
+  for (int i = 0; i < this->numel(); i++) {
+    // result += (val[i] / this->numel());
+    result +=
+        pow(static_cast<double>(val[i]) - static_cast<double>(val_cpu[i]), 2);
+  }
+  if (paddle::platform::is_xpu_place(this->place())) {
+    delete[] val;
+  }
+
+  if (paddle::platform::is_xpu_place(b.place())) {
+    delete[] val_cpu;
+  }
+
+  return result / this->numel();
+}
+
+double DenseTensor::check_mse(const DenseTensor& b) const {
+  if (!this->initialized()) {
+    return 0;
+  }
+  if (this->dtype() == paddle::experimental::CppTypeToDataType<float>::Type()) {
+    return this->check_mse_impl<float>(b);
+  } else if (this->dtype() ==
+             paddle::experimental::CppTypeToDataType<bool>::Type()) {
+    return this->check_mse_impl<bool>(b);
+  } else if (this->dtype() ==
+             paddle::experimental::CppTypeToDataType<int32_t>::Type()) {
+    return this->check_mse_impl<int32_t>(b);
+  } else if (this->dtype() == paddle::experimental::CppTypeToDataType<
+                                  paddle::experimental::float16>::Type()) {
+    return this->check_mse_impl<paddle::experimental::float16>(b);
+  } else {
+    return 0;
+  }
 }
 
 const void* DenseTensor::data() const {

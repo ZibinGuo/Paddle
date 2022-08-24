@@ -45,5 +45,13 @@ void TransformData(const phi::KernelKey &expected_kernel_type,
 void SetTensorToVariable(const Variable &in_var,
                          const phi::DenseTensor &tensor,
                          Variable *out_var);
+
+void TransformData(const Tensor &input_tensor,
+                   const paddle::platform::Place &dst_place,
+                   Tensor *output_tensor);
+
+void CopyVoidVariable(const Variable &in_var, Variable *out_var);
+
+void SetVoidVariableDebug(Variable *in_var);
 }  // namespace framework
 }  // namespace paddle

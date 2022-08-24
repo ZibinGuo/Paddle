@@ -165,6 +165,12 @@ class DenseTensor : public TensorBase,
 
   void* data();
 
+  float checksum() const;
+  double checkmean() const;
+  template <typename T>
+  double check_mse_impl(const DenseTensor& b) const;
+  double check_mse(const DenseTensor& b) const;
+
   /// \brief Get whether the storage_properties is inited.
   /// \return The init status of storage_properties.
   bool storage_properties_initialized() const;

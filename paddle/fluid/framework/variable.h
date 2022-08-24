@@ -65,13 +65,66 @@ class Variable {
     return holder_ && holder_->Type() == VarTypeTrait<T>::kId;
   }
 
-  void Clear() { holder_.reset(); }
+  void Clear() {
+    holder_.reset();
+    debug_holder_.reset();
+  }
 
   int Type() const {
     PADDLE_ENFORCE_NOT_NULL(
         holder_, platform::errors::NotFound("Variable is not initialized."));
     return holder_->Type();
   }
+
+  // ***paddle_xpu_debug***
+  template <typename T>
+  const T& DebugGet() const {
+    static_assert(
+        IsRegisteredVarType<T>(),
+        "Not registered type. Please register T inside var_type_traits.h");
+    PADDLE_ENFORCE_NOT_NULL(
+        debug_holder_,
+        platform::errors::NotFound("Variable is not initialized."));
+    PADDLE_ENFORCE_EQ(
+        debug_holder_->Type(),
+        VarTypeTrait<T>::kId,
+        platform::errors::InvalidArgument(
+            "The Variable type must be %s, but the type it holds is %s.",
+            ToTypeName(VarTypeTrait<T>::kId),
+            ToTypeName(debug_holder_->Type())));
+    return *static_cast<const T*>(debug_holder_->Ptr());
+  }
+
+  bool DebugIsInitialized() const { return debug_holder_ != nullptr; }
+
+  template <typename T>
+  T* DebugGetMutable() {
+    if (!debug_holder_) {
+      debug_holder_.reset(new PlaceholderImpl<T>());
+    } else {
+      PADDLE_ENFORCE_EQ(
+          debug_holder_->Type(),
+          VarTypeTrait<T>::kId,
+          platform::errors::InvalidArgument(
+              "The Variable type must be %s, but the type it holds is %s.",
+              ToTypeName(VarTypeTrait<T>::kId),
+              ToTypeName(debug_holder_->Type())));
+    }
+    return static_cast<T*>(debug_holder_->Ptr());
+  }
+
+  template <typename T>
+  bool DebugIsType() const {
+    return debug_holder_ && debug_holder_->Type() == VarTypeTrait<T>::kId;
+  }
+
+  int DebugType() const {
+    PADDLE_ENFORCE_NOT_NULL(
+        debug_holder_,
+        platform::errors::NotFound("Variable is not initialized."));
+    return debug_holder_->Type();
+  }
+  // ***paddle_xpu_debug***
 
  private:
   // This method hides type T, so it doesn't appear as a template parameter of
@@ -116,6 +169,7 @@ class Variable {
 
   // pointers to a PlaceholderImpl object indeed.
   std::shared_ptr<Placeholder> holder_;
+  std::shared_ptr<Placeholder> debug_holder_;
 };
 
 inline phi::DenseTensor::InplaceVersion* Variable::InplaceVersionCounter() {

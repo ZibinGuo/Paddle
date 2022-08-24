@@ -33,6 +33,10 @@ DECLARE_bool(use_mkldnn);
 namespace paddle {
 namespace imperative {
 
+struct timeval t1;
+struct timeval t2;
+static int64_t op_step_id = 0;
+
 using framework::Variable;
 void ThreadSafeNameSet::Insert(const std::string& name) {
   std::lock_guard<std::mutex> guard(mtx_);
@@ -77,6 +81,255 @@ static framework::RuntimeContext PrepareRuntimeContext(
     }
   }
   return framework::RuntimeContext(std::move(inputs), std::move(outputs));
+}
+
+bool ContinueOrNot(const std::string& op_type) {
+  bool continue_or_not =
+      !paddle::platform::is_in_xpu_debug_black_list(op_type) &&
+      !paddle::platform::is_in_xpu_debug_black_id_list(
+          std::to_string(op_step_id));
+  continue_or_not = continue_or_not &&
+                    (paddle::platform::is_in_xpu_debug_white_list(op_type) ||
+                     std::getenv("XPU_PADDLE_DEBUG_WHITE_LIST") == nullptr);
+  continue_or_not = continue_or_not &&
+                    (paddle::platform::is_in_xpu_debug_white_id_list(
+                         std::to_string(op_step_id)) ||
+                     std::getenv("XPU_PADDLE_DEBUG_WHITE_ID_LIST") == nullptr);
+  return continue_or_not;
+}
+
+bool ContinueRunDev2OrNot(const std::string& op_type) {
+  bool continue_or_not =
+      !paddle::platform::is_in_xpu_debug_run_dev2_black_list(op_type);
+  return continue_or_not;
+}
+
+bool DebugOrNot() {
+  bool continue_or_not = (std::getenv("XPU_PADDLE_DEBUG_GLOBAL") != nullptr ||
+                          std::getenv("XPU_PADDLE_DEBUG_OP") != nullptr);
+  return continue_or_not;
+}
+
+static std::string XPUDebugStartString(const std::string& op_type,
+                                       const PreparedOp& prepared_op) {
+  if (ContinueOrNot(op_type)) {
+    std::stringstream print_buffer;
+    print_buffer << "op_name_debug " << op_type << " " << op_step_id << " "
+                 << prepared_op.kernel_type().place_ << " "
+                 << prepared_op.kernel_type().data_type_ << " in: ";
+    return print_buffer.str();
+  } else {
+    return "";
+  }
+}
+
+template <typename VarType>
+static std::string XPUDebugStringImpl(const std::string& op_type,
+                                      const std::string& debug_str,
+                                      const NameVarMap<VarType>& ins,
+                                      const NameVarMap<VarType>& ins_dev2,
+                                      const platform::Place& place,
+                                      const platform::Place& place_dev2) {
+  std::stringstream print_buffer;
+  print_buffer << debug_str;
+  if (platform::is_xpu_place(place) || platform::is_xpu_place(place_dev2)) {
+    int r = xpu_wait();
+    PADDLE_ENFORCE_EQ(
+        r, 0, platform::errors::InvalidArgument("not initialized.[", op_type));
+  }
+  for (auto& pair : ins) {
+    for (size_t i = 0; i < pair.second.size(); i++) {
+      if (pair.second[i] == nullptr) continue;
+      VLOG(10) << pair.first << "-" << GetNameFromVar(pair.second[i]);
+      print_buffer << pair.first << "-" << GetNameFromVar(pair.second[i])
+                   << "-";
+      const framework::Variable& var = pair.second[i]->Var();
+      const framework::Variable& var_dev2 = ins_dev2.at(pair.first)[i]->Var();
+      if (!var.IsInitialized()) {
+        print_buffer << "None NOT_INITED_VAR ";
+      } else if (var.IsType<framework::LoDTensor>()) {
+        auto& tensor = var.Get<framework::LoDTensor>();
+        auto& tensor_dev2 = var_dev2.Get<framework::LoDTensor>();
+        if (tensor.IsInitialized()) {
+          print_buffer << tensor.dtype() << "-" << tensor.place() << "-"
+                       << tensor_dev2.place() << " "
+                       << tensor.check_mse(tensor_dev2) << " ";
+          //  << tensor_dev2.check_sum() << " ";
+        } else {
+          print_buffer << tensor.dtype() << " "
+                       << "NOT_INITED ";
+        }
+      } else {
+        print_buffer << "None NonTensor ";
+      }
+    }
+  }
+  return print_buffer.str();
+}
+
+std::string XPUDebugString(
+    const std::string& op_type,
+    const std::string& debug_str,
+    const NameVarMap<VarBase>& ins,
+    const NameVarMap<VarBase>& ins_dev2,
+    const platform::Place& place,
+    const platform::Place& place_dev2 = platform::CPUPlace()) {
+  if (ContinueOrNot(op_type)) {
+    return XPUDebugStringImpl<VarBase>(
+        op_type, debug_str, ins, ins_dev2, place, place_dev2);
+  } else {
+    return "";
+  }
+}
+
+std::string XPUDebugString(
+    const std::string& op_type,
+    const std::string& debug_str,
+    const NameVarMap<VariableWrapper>& ins,
+    const NameVarMap<VariableWrapper>& ins_dev2,
+    const platform::Place& place,
+    const platform::Place& place_dev2 = platform::CPUPlace()) {
+  if (ContinueOrNot(op_type)) {
+    return XPUDebugStringImpl<VariableWrapper>(
+        op_type, debug_str, ins, ins_dev2, place, place_dev2);
+  } else {
+    return "";
+  }
+}
+
+std::string XPUDebugString(
+    const std::string& op_type,
+    const std::string& debug_str,
+    const NameVarMap<egr::EagerVariable>& ins,
+    const NameVarMap<egr::EagerVariable>& ins_dev2,
+    const platform::Place& place,
+    const platform::Place& place_dev2 = platform::CPUPlace()) {
+  if (ContinueOrNot(op_type)) {
+    return XPUDebugStringImpl<egr::EagerVariable>(
+        op_type, debug_str, ins, ins_dev2, place, place_dev2);
+  } else {
+    return "";
+  }
+}
+
+static void XPUPaddleOpTimeTik() {
+  // struct timeval t1;
+  // struct timeval t2;
+  gettimeofday(&t1, NULL);
+}
+
+static void XPUPaddleOpTimeTok(const framework::OperatorBase& op,
+                               const PreparedOp prepared_op,
+                               const platform::Place& place) {
+  // 耗时统计逻辑
+  if (platform::is_xpu_place(place)) {
+    int r = xpu_wait();
+    PADDLE_ENFORCE_EQ(
+        r,
+        0,
+        platform::errors::InvalidArgument("not initialized.[", op.Type()));
+  }
+  gettimeofday(&t2, NULL);
+  uint32_t diff = 1000000 * (t2.tv_sec - t1.tv_sec) + t2.tv_usec - t1.tv_usec;
+  std::cout << "op_name " << op.Type() << " " << diff << " "
+            << prepared_op.kernel_type().place_ << " "
+            << prepared_op.kernel_type().data_type_ << std::endl;
+}
+
+static std::string XPUDebugDumpDataStart(const std::string& op_type,
+                                         const PreparedOp& prepared_op,
+                                         const std::string& debug_str = "") {
+  if (ContinueOrNot(op_type)) {
+    std::stringstream dump_file_dir_stream;
+    const char* path_char = std::getenv("XPU_PADDLE_DUMP_DATA_PATH");
+    std::string palce_str;
+    if (platform::is_cpu_place(prepared_op.kernel_type().place_)) {
+      palce_str = "CPU";
+    } else if (platform::is_xpu_place(prepared_op.kernel_type().place_)) {
+      palce_str = "XPU";
+    } else {
+      palce_str = "Unknow";
+    }
+    if (path_char != nullptr) {
+      std::string path_str = path_char;
+      dump_file_dir_stream << path_str << "/"
+                           << "dump_data-" << op_type << "-" << op_step_id
+                           << "-" << palce_str << "-"
+                           << prepared_op.kernel_type().data_type_ << debug_str
+                           << ".txt";
+    }
+    return dump_file_dir_stream.str();
+  } else {
+    return "";
+  }
+}
+
+template <typename VarType>
+static void XPUDebugDumpDataImpl(const std::string& op_type,
+                                 const std::string& dump_data_path,
+                                 const std::string& debug_str,
+                                 const NameVarMap<VarType>& ins,
+                                 const platform::Place& place) {
+  std::ofstream ofs(dump_data_path, std::ios::app);
+  ofs << debug_str << ":\n";
+  ofs.close();
+
+  if (platform::is_xpu_place(place)) {
+    int r = xpu_wait();
+    PADDLE_ENFORCE_EQ(
+        r, 0, platform::errors::InvalidArgument("not initialized.[", op_type));
+  }
+  for (auto& pair : ins) {
+    for (size_t i = 0; i < pair.second.size(); i++) {
+      if (pair.second[i] == nullptr) continue;
+      const framework::Variable& var = pair.second[i]->Var();
+      if (!var.IsInitialized()) {
+      } else if (var.IsType<framework::LoDTensor>()) {
+        auto& tensor = var.Get<framework::LoDTensor>();
+        if (tensor.IsInitialized()) {
+          std::ofstream ofs(dump_data_path, std::ios::app);
+          ofs.precision(12);
+          ofs << pair.first << "--" << GetNameFromVar(pair.second[i]) << ": ";
+          ofs << tensor << "\n";
+          ofs.close();
+        }
+      }
+    }
+  }
+  return;
+}
+
+void XPUDebugDumpData(const std::string& op_type,
+                      const std::string& dump_data_path,
+                      const std::string& debug_str,
+                      const NameVarMap<VarBase>& ins,
+                      const platform::Place& place) {
+  if (ContinueOrNot(op_type)) {
+    XPUDebugDumpDataImpl<VarBase>(
+        op_type, dump_data_path, debug_str, ins, place);
+  }
+}
+
+void XPUDebugDumpData(const std::string& op_type,
+                      const std::string& dump_data_path,
+                      const std::string& debug_str,
+                      const NameVarMap<VariableWrapper>& ins,
+                      const platform::Place& place) {
+  if (ContinueOrNot(op_type)) {
+    XPUDebugDumpDataImpl<VariableWrapper>(
+        op_type, dump_data_path, debug_str, ins, place);
+  }
+}
+
+void XPUDebugDumpData(const std::string& op_type,
+                      const std::string& dump_data_path,
+                      const std::string& debug_str,
+                      const NameVarMap<egr::EagerVariable>& ins,
+                      const platform::Place& place) {
+  if (ContinueOrNot(op_type)) {
+    XPUDebugDumpDataImpl<egr::EagerVariable>(
+        op_type, dump_data_path, debug_str, ins, place);
+  }
 }
 
 template <typename VarType>
@@ -498,7 +751,8 @@ static void OpBaseRunImpl(const framework::OperatorBase& op,
   }
 
   VLOG(5) << LayerDebugString(op.Type(), ins, outs);
-
+  op_step_id++;
+  VLOG(10) << "Op ID: " << op_step_id;
   /**
    * [ Why need temporary inputs here? ]
    *
@@ -517,14 +771,128 @@ static void OpBaseRunImpl(const framework::OperatorBase& op,
    * after the execution of op, but the original input is directly
    * overwritten in the previous dynamic graph implementation.
    */
+  VLOG(10) << "Start prepare dev1!";
   auto prepared_op =
       PreparedOp::Prepare(ins, outs, *op_kernel, place, attrs, default_attrs);
   auto tmp_ins_ptr = PrepareData<VarType>(
       *op_kernel, ins, prepared_op.kernel_key(), prepared_op.place());
+  VLOG(10) << "End prepare dev1!";
+
+  std::shared_ptr<NameVarMap<VarType>> ins_dev2_ptr = nullptr;
+  std::shared_ptr<NameVarMap<VarType>> outs_dev2_ptr = nullptr;
+  if (DebugOrNot()) {
+    VLOG(10) << "Start copy input!";
+    ins_dev2_ptr =
+        TemporaryData<VarType>(ins, paddle::platform::xpu_debug_run_dev2());
+    VLOG(10) << "End copy input!";
+    VLOG(10) << "Start copy output!";
+    outs_dev2_ptr = TemporaryData<VarType>(
+        outs, paddle::platform::xpu_debug_run_dev2(), ins, ins_dev2_ptr);
+    VLOG(10) << "End copy output!";
+  }
+  VLOG(10) << "Start prepare dev2!";
+  auto prepared_op_dev2 =
+      PreparedOp::Prepare(*ins_dev2_ptr,
+                          *outs_dev2_ptr,
+                          *op_kernel,
+                          paddle::platform::xpu_debug_run_dev2(),
+                          attrs,
+                          default_attrs);
+  auto tmp_ins_dev2_ptr = DebugPrepareData<VarType>(
+      *op_kernel, *ins_dev2_ptr, prepared_op_dev2.kernel_type());
+  VLOG(10) << "End prepare dev2!";
+
+  std::string debug_str;
+  if (DebugOrNot()) {
+    VLOG(10) << "Start check mse for input!";
+    debug_str = XPUDebugStartString(op.Type(), prepared_op);
+    debug_str = XPUDebugString(op.Type(),
+                               debug_str,
+                               ins,
+                               *ins_dev2_ptr,
+                               prepared_op.kernel_type().place_,
+                               prepared_op_dev2.kernel_type().place_);
+    VLOG(10) << "End check mse for input!";
+  }
+
+  std::string dump_data_path;
+  std::string dump_data_dubug_path;
+  if (std::getenv("XPU_PADDLE_DUMP_DATA_PATH") != nullptr) {
+    dump_data_path = XPUDebugDumpDataStart(op.Type(), prepared_op);
+    XPUDebugDumpData(op.Type(), dump_data_path, "input", ins, place);
+    if (DebugOrNot()) {
+      dump_data_dubug_path =
+          XPUDebugDumpDataStart(op.Type(), prepared_op_dev2, "-debug");
+      XPUDebugDumpData(op.Type(),
+                       dump_data_dubug_path,
+                       "input",
+                       *ins_dev2_ptr,
+                       paddle::platform::xpu_debug_run_dev2());
+    }
+  }
+
+  if (std::getenv("XPU_PADDLE_OP_TIME") != nullptr) {
+    XPUPaddleOpTimeTik();
+  }
+
+  VLOG(10) << "Strat run dev1";
   if (tmp_ins_ptr == nullptr) {
     prepared_op.Run(ins, outs, attrs, default_attrs);
   } else {
     prepared_op.Run(*tmp_ins_ptr, outs, attrs, default_attrs);
+  }
+  VLOG(10) << "End run dev1";
+
+  if (std::getenv("XPU_PADDLE_OP_TIME") != nullptr) {
+    XPUPaddleOpTimeTok(op, prepared_op, place);
+  }
+
+  if (DebugOrNot() && ContinueRunDev2OrNot(op.Type())) {
+    VLOG(10) << "Strat run dev2";
+    if (paddle::platform::is_xpu_place(prepared_op.kernel_type().place_)) {
+      xpu_wait();
+    }
+    if (tmp_ins_dev2_ptr == nullptr) {
+      prepared_op_dev2.Run(*ins_dev2_ptr, *outs_dev2_ptr, attrs, default_attrs);
+    } else {
+      prepared_op_dev2.Run(
+          *tmp_ins_dev2_ptr, *outs_dev2_ptr, attrs, default_attrs);
+    }
+    if (paddle::platform::is_xpu_place(prepared_op_dev2.kernel_type().place_)) {
+      xpu_wait();
+    }
+    VLOG(10) << "End run dev2";
+  }
+
+  if (DebugOrNot()) {
+    VLOG(10) << "Start copy output after dev2 run!";
+    CopyOutputData<VarType>(op.Type(),
+                            outs,
+                            outs_dev2_ptr.get(),
+                            paddle::platform::xpu_debug_run_dev2());
+    VLOG(10) << "End copy output after dev2 run!";
+    VLOG(10) << "Start check mse for output!";
+    debug_str = XPUDebugString(op.Type(),
+                               debug_str + " out: ",
+                               outs,
+                               *outs_dev2_ptr,
+                               prepared_op.kernel_type().place_,
+                               prepared_op_dev2.kernel_type().place_);
+    VLOG(10) << "End check mse for output!";
+    if (debug_str != "") {
+      std::cout << debug_str << std::endl;
+    }
+  }
+
+  if (std::getenv("XPU_PADDLE_DUMP_DATA_PATH") != nullptr) {
+    XPUDebugDumpData(op.Type(), dump_data_path, "output", outs, place);
+    if (DebugOrNot()) {
+      XPUDebugDumpData(op.Type(),
+                       dump_data_dubug_path,
+                       "output",
+                       *outs_dev2_ptr,
+                       paddle::platform::xpu_debug_run_dev2());
+    }
   }
 
   VLOG(4) << LayerDebugString(op.Type(), ins, outs);
