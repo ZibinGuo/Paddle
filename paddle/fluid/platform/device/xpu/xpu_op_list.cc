@@ -168,6 +168,24 @@ bool is_in_xpu_debug_white_id_list(const std::string& op_id) {
   return false;
 }
 
+platform::Place& xpu_debug_run_dev2() {
+  static platform::Place dev2 = platform::CPUPlace();
+  static bool inited = false;
+  static std::string device = "CPU";
+  if (!inited) {
+    if (std::getenv("XPU_PADDLE_DEBUG_RUN_DEV2") != nullptr) {
+      std::string ops(std::getenv("XPU_PADDLE_DEBUG_RUN_DEV2"));
+      if (ops == "1") {
+        dev2 = platform::XPUPlace();
+        device = "XPU";
+      }
+    }
+    inited = true;
+    VLOG(3) << "XPU Paddle Debug Run Dev2: " << device;
+  }
+  return dev2;
+}
+
 #ifdef PADDLE_WITH_XPU_KP
 bool is_in_xpu_kpwhite_list(const std::string& op_name) {
   static bool inited = false;

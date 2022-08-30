@@ -190,52 +190,43 @@ void* DenseTensor::data() {
                                  meta_.offset);
 }
 
-float DenseTensor::checksum() const {
-  if (!this->initialized()) {
-    return 0;
+template <typename T>
+double DenseTensor::check_sum_impl() const {
+  double result = 0;
+  T* val = const_cast<T*>(data<T>());
+  if (paddle::platform::is_xpu_place(this->place())) {
+    val = new T[this->numel()];
+    xpu_wait();
+    xpu_memcpy(val, data(), this->numel() * sizeof(T), XPU_DEVICE_TO_HOST);
   }
-  float result = 0;
-  if (this->dtype() == paddle::experimental::CppTypeToDataType<float>::Type()) {
-    float* val = const_cast<float*>(data<float>());
-    if (paddle::platform::is_xpu_place(this->place())) {
-      val = new float[this->numel()];
-      xpu_wait();
-      xpu_memcpy(
-          val, data(), this->numel() * sizeof(float), XPU_DEVICE_TO_HOST);
-    }
-    for (int i = 0; i < this->numel(); i++) {
-      result += val[i];
-    }
-    if (paddle::platform::is_xpu_place(this->place())) {
-      delete[] val;
-    }
+  for (int i = 0; i < this->numel(); i++) {
+    result += static_cast<double>(val[i]);
+  }
+  if (paddle::platform::is_xpu_place(this->place())) {
+    delete[] val;
   }
   // ToDo: only support float now
   return result;
 }
 
-double DenseTensor::checkmean() const {
+double DenseTensor::check_sum() const {
   if (!this->initialized()) {
     return 0;
   }
-  double result = 0.0;
   if (this->dtype() == paddle::experimental::CppTypeToDataType<float>::Type()) {
-    float* val = const_cast<float*>(data<float>());
-    if (paddle::platform::is_xpu_place(this->place())) {
-      val = new float[this->numel()];
-      xpu_wait();
-      xpu_memcpy(
-          val, data(), this->numel() * sizeof(float), XPU_DEVICE_TO_HOST);
-    }
-    for (int i = 0; i < this->numel(); i++) {
-      result += (static_cast<double>(val[i]) / this->numel());
-    }
-    if (paddle::platform::is_xpu_place(this->place())) {
-      delete[] val;
-    }
+    return this->check_sum_impl<float>();
+  } else if (this->dtype() ==
+             paddle::experimental::CppTypeToDataType<bool>::Type()) {
+    return this->check_sum_impl<bool>();
+  } else if (this->dtype() ==
+             paddle::experimental::CppTypeToDataType<int32_t>::Type()) {
+    return this->check_sum_impl<int32_t>();
+  } else if (this->dtype() == paddle::experimental::CppTypeToDataType<
+                                  paddle::experimental::float16>::Type()) {
+    return this->check_sum_impl<paddle::experimental::float16>();
+  } else {
+    return 0;
   }
-  // ToDo: only support float now
-  return result;
 }
 
 template <typename T>

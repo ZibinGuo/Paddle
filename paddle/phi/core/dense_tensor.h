@@ -165,8 +165,9 @@ class DenseTensor : public TensorBase,
 
   void* data();
 
-  float checksum() const;
-  double checkmean() const;
+  template <typename T>
+  double check_sum_impl() const;
+  double check_sum() const;
   template <typename T>
   double check_mse_impl(const DenseTensor& b) const;
   double check_mse(const DenseTensor& b) const;

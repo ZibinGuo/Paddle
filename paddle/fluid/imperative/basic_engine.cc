@@ -150,23 +150,31 @@ void BasicEngine::CheckBackwardInputs(const OpBase& op) {
 
       auto* inner_var = var->MutableVar();
       phi::DenseTensor* tensor = nullptr;
+      phi::DenseTensor* debug_tensor = nullptr;
       if (!inner_var->IsInitialized() ||
           inner_var->IsType<phi::DenseTensor>()) {
         tensor = inner_var->GetMutable<phi::DenseTensor>();
+        debug_tensor = inner_var->DebugGetMutable<phi::DenseTensor>();
       }
 
       if (tensor && !tensor->IsInitialized()) {
         auto* dev_ctx = platform::DeviceContextPool::Instance().Get(op.place());
+        auto* dev2_ctx = platform::DeviceContextPool::Instance().Get(
+            paddle::platform::xpu_debug_run_dev2());
         // NOTE(zhiqiu): since grad variable is ungenerated, so the dtype is not
         // correct. var->DataType() returns the default dtype, which is float32.
         // Here, we use the type of the corresponding forward datatype.
 
         tensor->mutable_data(
             op.place(), framework::TransToPhiDataType(var->ForwardDataType()));
+        debug_tensor->mutable_data(
+            paddle::platform::xpu_debug_run_dev2(),
+            framework::TransToPhiDataType(var->ForwardDataType()));
         VLOG(6) << "Set ungenerated Grad: " << var->Name()
                 << " as zero with dtype "
                 << framework::DataTypeToString(var->ForwardDataType());
         phi::funcs::set_constant(*dev_ctx, tensor, 0.0);
+        phi::funcs::set_constant(*dev2_ctx, debug_tensor, 0.0);
       }
     }
   }
@@ -356,6 +364,8 @@ static void PerformBackwardInplace(const std::string& op_type,
     auto in_to_outs = infer_inplace(true);
     for (auto& pair : in_to_outs) {
       phi::DenseTensor *in_tensor = nullptr, *out_tensor = nullptr;
+      phi::DenseTensor *in_debug_tensor = nullptr,
+                       *out_debug_tensor = nullptr;
       for (auto& p : ins) {
         if (p.first == pair.first) {
           // has at least one var
@@ -367,6 +377,8 @@ static void PerformBackwardInplace(const std::string& op_type,
               if (IsInputCanInplace(in_var)) {
                 in_tensor =
                     in_var->MutableVar()->GetMutable<phi::DenseTensor>();
+                in_debug_tensor = in_var->MutableVar()
+                                      ->DebugGetMutable<phi::DenseTensor>();
               }
             }
           }
@@ -382,6 +394,8 @@ static void PerformBackwardInplace(const std::string& op_type,
             if (out_var->Type() == framework::proto::VarType::LOD_TENSOR) {
               out_tensor =
                   out_var->MutableVar()->GetMutable<phi::DenseTensor>();
+              out_debug_tensor = out_var->MutableVar()
+                                     ->DebugGetMutable<phi::DenseTensor>();
             }
           }
         }
@@ -390,7 +404,9 @@ static void PerformBackwardInplace(const std::string& op_type,
         continue;
       }
       out_tensor->ShareBufferWith(*in_tensor);
+      out_debug_tensor->ShareBufferWith(*in_debug_tensor);
       out_tensor->Resize(in_tensor->dims());
+      out_debug_tensor->Resize(in_debug_tensor->dims());
       VLOG(4) << "Inplace performed in op " << op_type << ": " << pair.second
               << " -> " << pair.first;
     }

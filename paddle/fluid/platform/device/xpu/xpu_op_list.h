@@ -39,6 +39,7 @@ bool is_in_xpu_debug_black_id_list(const std::string& op_id);
 bool is_in_xpu_debug_white_list(const std::string& op_name);
 bool is_in_xpu_debug_white_id_list(const std::string& op_id);
 bool is_in_xpu_debug_run_dev2_black_list(const std::string& op_name);
+platform::Place& xpu_debug_run_dev2();
 
 #ifdef PADDLE_WITH_XPU_KP
 bool is_xpu_kp_support_op(const std::string& op_name,

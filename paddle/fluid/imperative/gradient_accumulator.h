@@ -182,7 +182,18 @@ void SelectedRowsAddTensor(const VarType& src_selected_rows_var,
                            VarType* dst_tensor_var);
 
 template <typename VarType>
+void SelectedRowsAddToDebugTensor(const VarType& src, VarType* dst);
+
+template <typename VarType>
+void SelectedRowsAddDebugTensor(const VarType& src_selected_rows_var,
+                                const VarType& src_tensor_var,
+                                VarType* dst_tensor_var);
+
+template <typename VarType>
 void TensorAdd(const VarType& src, VarType* dst);
+
+template <typename VarType>
+void TensorDebugAdd(const VarType& src, VarType* dst);
 
 inline void CheckVar(const std::shared_ptr<VariableWrapper>& pre,
                      const std::shared_ptr<VariableWrapper>& post) {

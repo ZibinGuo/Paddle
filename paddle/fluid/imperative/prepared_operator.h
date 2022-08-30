@@ -73,23 +73,40 @@ void SetForwardDataTypeOfGradVar<egr::EagerVariable>(
 }
 
 template <typename VarType>
+std::pair<std::string, int> CheckInplace(const NameVarMap<VarType>& outs,
+                                         const NameVarMap<VarType>& ins,
+                                         std::shared_ptr<VarType> var) {
+  for (const auto& name_pair : ins) {
+    for (size_t i = 0; i < name_pair.second.size(); ++i) {
+      if (name_pair.second[i].get() == var.get()) {
+        return std::make_pair(name_pair.first, i);
+      }
+    }
+  }
+  return {"", -1};
+}
+
+template <typename VarType>
 std::shared_ptr<NameVarMap<VarType>> TemporaryData(
-    const NameVarMap<VarType>& ins, const platform::Place& place) {
-  std::shared_ptr<NameVarMap<VarType>> tmp_ins_ptr = nullptr;
-  if (ins.empty()) {
-    tmp_ins_ptr = std::make_shared<NameVarMap<VarType>>(ins);
-    return tmp_ins_ptr;
+    const NameVarMap<VarType>& ins_outs,
+    const platform::Place& place,
+    const NameVarMap<VarType>& ins = {},
+    std::shared_ptr<NameVarMap<VarType>> tmp_ins_ptr = nullptr) {
+  std::shared_ptr<NameVarMap<VarType>> tmp_ins_outs_ptr = nullptr;
+  if (ins_outs.empty()) {
+    tmp_ins_outs_ptr = std::make_shared<NameVarMap<VarType>>(ins_outs);
+    return tmp_ins_outs_ptr;
   }
 
-  for (const auto& name_pair : ins) {
+  for (const auto& name_pair : ins_outs) {
     for (size_t i = 0; i < name_pair.second.size(); ++i) {
       auto& template_var = name_pair.second[i];
       if (template_var == nullptr) {
-        if (tmp_ins_ptr == nullptr) {
-          tmp_ins_ptr = std::make_shared<NameVarMap<VarType>>(ins);
+        if (tmp_ins_outs_ptr == nullptr) {
+          tmp_ins_outs_ptr = std::make_shared<NameVarMap<VarType>>(ins_outs);
           continue;
         } else {
-          (*tmp_ins_ptr)[name_pair.first][i] = template_var;
+          (*tmp_ins_outs_ptr)[name_pair.first][i] = template_var;
           continue;
         }
       }
@@ -98,15 +115,25 @@ std::shared_ptr<NameVarMap<VarType>> TemporaryData(
       if (tensor && tensor->IsInitialized() && (tensor->memory_size() != 0)) {
         if (debug_tensor && debug_tensor->IsInitialized() &&
             (debug_tensor->memory_size() != 0)) {
+          VLOG(10) << name_pair.first
+                   << " var_base_addr = " << template_var.get();
           VLOG(10) << name_pair.first << "-"
                    << GetNameFromVar(name_pair.second[i])
-                   << "  tensor->memory_size() = " << tensor->memory_size()
-                   << ", tensor->meta() = " << tensor->meta();
-          VLOG(10) << "  debug_tensor->memory_size() = "
+                   << "        tensor->memory_size() = "
+                   << tensor->memory_size()
+                   << ",       tensor->meta() = " << tensor->meta()
+                   << ",       tensor->data() = " << tensor->data();
+          VLOG(10) << name_pair.first << "-"
+                   << GetNameFromVar(name_pair.second[i])
+                   << "  debug_tensor->memory_size() = "
                    << debug_tensor->memory_size()
-                   << ", debug_tensor->meta() = " << debug_tensor->meta();
+                   << ", debug_tensor->meta() = " << debug_tensor->meta()
+                   << ", debug_tensor->data() = " << debug_tensor->data();
           if (std::getenv("XPU_PADDLE_DEBUG_OP") != nullptr) {
-            paddle::framework::TransformData(
+            // paddle::framework::TransformData(
+            //     *tensor, place,
+            //     const_cast<framework::Tensor*>(debug_tensor));
+            paddle::framework::TensorCopySync(
                 *tensor, place, const_cast<framework::Tensor*>(debug_tensor));
           }
           // tensor = debug_tensor;
@@ -115,177 +142,65 @@ std::shared_ptr<NameVarMap<VarType>> TemporaryData(
           debug_tensor = GetDebugTensorFromVar(template_var->Var());
           paddle::framework::TransformData(
               *tensor, place, const_cast<framework::Tensor*>(debug_tensor));
+          VLOG(10) << name_pair.first << "-" << GetNameFromVar(template_var)
+                   << " debug_tensor not initial, copy from source tensor";
           // tensor = debug_tensor;
+          VLOG(3) << "Transform Variable " << GetNameFromVar(template_var)
+                  << " from "
+                  << "{data_type[" << tensor->dtype() << "]; data_layout["
+                  << tensor->layout() << "]; place[" << tensor->place() << "]"
+                  << " to "
+                  << "place[" << place << "]";
+          VLOG(3) << GetNameFromVar(template_var)
+                  << " memory size is: " << tensor->memory_size();
         }
-        VLOG(3) << "Transform Variable " << GetNameFromVar(template_var)
-                << " from "
-                << "{data_type[" << tensor->dtype() << "]; data_layout["
-                << tensor->layout() << "]; place[" << tensor->place() << "]"
-                << " to "
-                << "place[" << place << "]";
-        VLOG(3) << GetNameFromVar(template_var)
-                << " memory size is: " << tensor->memory_size();
-        if (tmp_ins_ptr == nullptr) {
-          tmp_ins_ptr = std::make_shared<NameVarMap<VarType>>(ins);
+        if (tmp_ins_outs_ptr == nullptr) {
+          tmp_ins_outs_ptr = std::make_shared<NameVarMap<VarType>>(ins_outs);
         }
+        // if (!ins.empty() && tmp_ins_ptr) {
+        //   std::pair<std::string, int> name_var = CheckInplace(ins_outs, ins,
+        //   template_var); if (name_var.second != -1) {
+        //     (*tmp_ins_outs_ptr)[name_pair.first][i] =
+        //     (*tmp_ins_ptr)[name_var.first][name_var.second]; continue;
+        //   }
+        // }
         auto tmp_var = std::make_shared<VarType>(GetNameFromVar(template_var));
         SetType(tmp_var, GetType(template_var));
         SetTensorToVariable(
             template_var->Var(), *debug_tensor, tmp_var->MutableVar());
-        (*tmp_ins_ptr)[name_pair.first][i] = tmp_var;
+        (*tmp_ins_outs_ptr)[name_pair.first][i] = tmp_var;
       } else {
-        if (tmp_ins_ptr == nullptr) {
-          tmp_ins_ptr = std::make_shared<NameVarMap<VarType>>(ins);
+        if (tmp_ins_outs_ptr == nullptr) {
+          tmp_ins_outs_ptr = std::make_shared<NameVarMap<VarType>>(ins_outs);
         }
+        // if (!ins.empty() && tmp_ins_ptr) {
+        //   std::pair<std::string, int> name_var = CheckInplace(ins_outs, ins,
+        //   template_var); if (name_var.second != -1) {
+        //     (*tmp_ins_outs_ptr)[name_pair.first][i] =
+        //     (*tmp_ins_ptr)[name_var.first][name_var.second]; continue;
+        //   }
+        // }
         auto tmp_var = std::make_shared<VarType>(GetNameFromVar(template_var));
         if (template_var->Var().IsInitialized()) {
           SetType(tmp_var, GetType(template_var));
           paddle::framework::SetVoidVariableDebug(template_var->MutableVar());
           CopyVoidVariable(template_var->Var(), tmp_var->MutableVar());
         }
-        (*tmp_ins_ptr)[name_pair.first][i] = tmp_var;
+        (*tmp_ins_outs_ptr)[name_pair.first][i] = tmp_var;
+      }
+
+      if (!ins.empty() && tmp_ins_ptr) {
+        std::pair<std::string, int> name_var =
+            CheckInplace(ins_outs, ins, template_var);
+        if (name_var.second != -1) {
+          (*tmp_ins_outs_ptr)[name_pair.first][i] =
+              (*tmp_ins_ptr)[name_var.first][name_var.second];
+        }
       }
 
       std::stringstream ss;
-      ss << name_pair.first << "-" << GetNameFromVar(name_pair.second[i])
-         << "   dev1: ";
-      const auto* test_tensor = GetTensorFromVar(template_var->Var());
-      if (template_var->Var().IsInitialized()) {
-        ss << "var_addr:" << &template_var->Var() << " "
-           << "var_holder_:" << test_tensor << " ";
-        if (test_tensor && test_tensor->IsInitialized() &&
-            (test_tensor->memory_size() != 0)) {
-          ss << "tensor_addr:" << test_tensor << " "
-             << "tensor_place:" << test_tensor->place() << " "
-             << "tensor_meta = " << test_tensor->meta()
-             << "tensor_data_addr:" << test_tensor->data() << std::endl;
-        } else {
-          ss << "NOT_INITED_TENSOR or NonTensor" << std::endl;
-        }
-      } else {
-        ss << "NOT_INITED_VAR " << std::endl;
-      }
-
-      test_tensor = GetDebugTensorFromVar(template_var->Var());
-      ss << name_pair.first << "-" << GetNameFromVar(name_pair.second[i])
-         << "  debug: ";
-      if (template_var->Var().IsInitialized()) {
-        ss << "var_addr:" << &template_var->Var() << " "
-           << "var_holder_:" << test_tensor << " ";
-        // ss << "var_place_before:" << GetPlace(template_var) << " ";
-        if (test_tensor && test_tensor->IsInitialized() &&
-            (test_tensor->memory_size() != 0)) {
-          ss << "tensor_addr:" << test_tensor << " "
-             << "tensor_place:" << test_tensor->place() << " "
-             << "tensor_meta = " << test_tensor->meta()
-             << "tensor_data_addr:" << test_tensor->data() << std::endl;
-        } else {
-          ss << "NOT_INITED_TENSOR or NonTensor" << std::endl;
-        }
-      } else {
-        ss << "NOT_INITED_VAR " << std::endl;
-      }
-
-      auto& test_var = (*tmp_ins_ptr)[name_pair.first][i];
-      test_tensor = GetTensorFromVar(test_var->Var());
-      ss << name_pair.first << "-" << GetNameFromVar(test_var) << "   dev2: ";
-      if (test_var->Var().IsInitialized()) {
-        ss << "var_addr:" << &test_var << " "
-           << "var_holder_:" << test_tensor << " ";
-        if (test_tensor && test_tensor->IsInitialized() &&
-            (test_tensor->memory_size() != 0)) {
-          ss << "tensor_addr:" << test_tensor << " "
-             << "tensor_place:" << test_tensor->place() << " "
-             << "tensor_meta = " << test_tensor->meta()
-             << "tensor_data_addr:" << test_tensor->data() << std::endl;
-        } else {
-          ss << "NOT_INITED_TENSOR or NonTensor" << std::endl;
-        }
-      } else {
-        ss << "NOT_INITED_VAR " << std::endl;
-      }
-      VLOG(10) << ss.str();
-    }
-  }
-  return tmp_ins_ptr;
-}
-
-template <typename VarType>
-void CopyOutputData(const std::string& op_type,
-                    const NameVarMap<VarType>& ins,
-                    NameVarMap<VarType>* tmp_ins) {
-  if (ins.empty()) {
-    return;
-  }
-  for (const auto& name_pair : ins) {
-    for (size_t i = 0; i < name_pair.second.size(); ++i) {
-      auto& template_var = name_pair.second[i];
-      if (template_var == nullptr) {
-        continue;
-      }
-      // const auto* tensor = GetTensorFromVar(template_var->Var());
-      const auto* debug_tensor = GetDebugTensorFromVar(template_var->Var());
-      auto& template_tmp_ins_var = (*tmp_ins)[name_pair.first][i];
-      const auto* tmp_ins_tensor =
-          GetTensorFromVar(template_tmp_ins_var->Var());
-      if (paddle::platform::is_in_xpu_debug_run_dev2_black_list(op_type)) {
-        tmp_ins_tensor = GetTensorFromVar(template_var->Var());
-      }
-      if (tmp_ins_tensor && tmp_ins_tensor->IsInitialized() &&
-          (tmp_ins_tensor->memory_size() != 0)) {
-        if (debug_tensor && debug_tensor->IsInitialized() &&
-            (debug_tensor->memory_size() != 0)) {
-          VLOG(10) << name_pair.first << "-"
-                   << GetNameFromVar(name_pair.second[i])
-                   << "  tmp_ins_tensor->memory_size() = "
-                   << tmp_ins_tensor->memory_size()
-                   << ", tmp_ins_tensor->meta() = " << tmp_ins_tensor->meta();
-          VLOG(10) << "  debug_tensor->memory_size() = "
-                   << debug_tensor->memory_size()
-                   << ", debug_tensor->meta() = " << debug_tensor->meta();
-          // const_cast<framework::Tensor*>(debug_tensor)->set_meta(tmp_ins_tensor->meta());
-          if (paddle::platform::is_in_xpu_debug_run_dev2_black_list(op_type)) {
-            paddle::framework::TransformData(
-                *tmp_ins_tensor,
-                debug_tensor->place(),
-                const_cast<framework::Tensor*>(debug_tensor));
-            const auto* tmp_ins_tensor_ =
-                GetTensorFromVar(template_tmp_ins_var->Var());
-            const_cast<framework::Tensor*>(tmp_ins_tensor_)
-                ->ShareDataWith(*debug_tensor);
-          } else {
-            const_cast<framework::Tensor*>(debug_tensor)
-                ->ShareDataWith(*tmp_ins_tensor);
-          }
-        } else {
-          paddle::framework::SetVoidVariableDebug(template_var->MutableVar());
-          debug_tensor = GetDebugTensorFromVar(template_var->Var());
-          paddle::framework::TransformData(
-              *tmp_ins_tensor,
-              tmp_ins_tensor->place(),
-              const_cast<framework::Tensor*>(debug_tensor));
-          if (paddle::platform::is_in_xpu_debug_run_dev2_black_list(op_type)) {
-            const auto* tmp_ins_tensor_ =
-                GetTensorFromVar(template_tmp_ins_var->Var());
-            const_cast<framework::Tensor*>(tmp_ins_tensor_)
-                ->ShareDataWith(*debug_tensor);
-          }
-        }
-        VLOG(3) << "Transform Variable " << GetNameFromVar(template_var)
-                << " from "
-                << "{data_type[" << tmp_ins_tensor->dtype() << "]; data_layout["
-                << tmp_ins_tensor->layout() << "]; place["
-                << tmp_ins_tensor->place() << "]"
-                << " to "
-                << "]; place[" << debug_tensor->place() << "]";
-        VLOG(3) << GetNameFromVar(template_var)
-                << " memory size is: " << debug_tensor->memory_size();
-      } else {
-        if (template_var->Var().IsInitialized()) {
-          paddle::framework::SetVoidVariableDebug(template_var->MutableVar());
-        }
-      }
-      std::stringstream ss;
+      ss.str("");
+      // ss.clear();
       ss << name_pair.first << "-" << GetNameFromVar(name_pair.second[i])
          << "  dev1: ";
       const auto* test_tensor = GetTensorFromVar(template_var->Var());
@@ -296,46 +211,7 @@ void CopyOutputData(const std::string& op_type,
             (test_tensor->memory_size() != 0)) {
           ss << "tensor_addr:" << test_tensor << " "
              << "tensor_place:" << test_tensor->place() << " "
-             << "tensor_meta = " << test_tensor->meta()
-             << "tensor_data_addr:" << test_tensor->data() << std::endl;
-        } else {
-          ss << "NOT_INITED_TENSOR or NonTensor" << std::endl;
-        }
-      } else {
-        ss << "NOT_INITED_VAR " << std::endl;
-      }
-
-      auto& test_var = (*tmp_ins)[name_pair.first][i];
-      test_tensor = GetTensorFromVar(test_var->Var());
-      ss << name_pair.first << "-" << GetNameFromVar(test_var) << std::endl;
-      ss << "    tmp: ";
-      if (test_var->Var().IsInitialized()) {
-        ss << "var_addr:" << &test_var << " "
-           << "var_holder_:" << test_tensor << " ";
-        if (test_tensor && test_tensor->IsInitialized() &&
-            (test_tensor->memory_size() != 0)) {
-          ss << "tensor_addr:" << test_tensor << " "
-             << "tensor_place:" << test_tensor->place() << " "
-             << "tensor_meta = " << test_tensor->meta()
-             << "tensor_data_addr:" << test_tensor->data() << std::endl;
-        } else {
-          ss << "NOT_INITED_TENSOR or NonTensor" << std::endl;
-        }
-      } else {
-        ss << "NOT_INITED_VAR " << std::endl;
-      }
-
-      test_tensor = GetDebugTensorFromVar(template_var->Var());
-      ss << name_pair.first << "-" << GetNameFromVar(name_pair.second[i])
-         << "    dev2: ";
-      if (template_var->Var().IsInitialized()) {
-        ss << "var_addr:" << &template_var->Var() << " "
-           << "var_holder_:" << test_tensor << " ";
-        if (test_tensor && test_tensor->IsInitialized() &&
-            (test_tensor->memory_size() != 0)) {
-          ss << "tensor_addr:" << test_tensor << " "
-             << "tensor_place:" << test_tensor->place() << " "
-             << "tensor_meta = " << test_tensor->meta()
+             << "tensor_meta = " << test_tensor->meta() << " "
              << "tensor_data_addr:" << test_tensor->data() << std::endl;
         } else {
           ss << "NOT_INITED_TENSOR or NonTensor" << std::endl;
@@ -344,6 +220,227 @@ void CopyOutputData(const std::string& op_type,
         ss << "NOT_INITED_VAR " << std::endl;
       }
       VLOG(10) << ss.str();
+      ss.str("");
+      // ss.clear();
+
+      test_tensor = GetDebugTensorFromVar(template_var->Var());
+      ss << name_pair.first << "-" << GetNameFromVar(name_pair.second[i])
+         << "  dev2: ";
+      if (template_var->Var().IsInitialized()) {
+        ss << "var_addr:" << &template_var->Var() << " "
+           << "var_holder_:" << test_tensor << " ";
+        // ss << "var_place_before:" << GetPlace(template_var) << " ";
+        if (test_tensor && test_tensor->IsInitialized() &&
+            (test_tensor->memory_size() != 0)) {
+          ss << "tensor_addr:" << test_tensor << " "
+             << "tensor_place:" << test_tensor->place() << " "
+             << "tensor_meta = " << test_tensor->meta() << " "
+             << "tensor_data_addr:" << test_tensor->data() << std::endl;
+        } else {
+          ss << "NOT_INITED_TENSOR or NonTensor" << std::endl;
+        }
+      } else {
+        ss << "NOT_INITED_VAR " << std::endl;
+      }
+      VLOG(10) << ss.str();
+      ss.str("");
+      // ss.clear();
+
+      auto& test_var = (*tmp_ins_outs_ptr)[name_pair.first][i];
+      test_tensor = GetTensorFromVar(test_var->Var());
+      ss << name_pair.first << "-" << GetNameFromVar(test_var) << "   tmp: ";
+      if (test_var->Var().IsInitialized()) {
+        ss << "var_addr:" << &test_var << " "
+           << "var_holder_:" << test_tensor << " ";
+        if (test_tensor && test_tensor->IsInitialized() &&
+            (test_tensor->memory_size() != 0)) {
+          ss << "tensor_addr:" << test_tensor << " "
+             << "tensor_place:" << test_tensor->place() << " "
+             << "tensor_meta = " << test_tensor->meta() << " "
+             << "tensor_data_addr:" << test_tensor->data() << std::endl;
+        } else {
+          ss << "NOT_INITED_TENSOR or NonTensor" << std::endl;
+        }
+      } else {
+        ss << "NOT_INITED_VAR " << std::endl;
+      }
+      VLOG(10) << ss.str();
+      ss.str("");
+      // ss.clear();
+    }
+  }
+  return tmp_ins_outs_ptr;
+}
+
+template <typename VarType>
+void CopyOutputData(const std::string& op_type,
+                    const NameVarMap<VarType>& outs,
+                    NameVarMap<VarType>* tmp_outs,
+                    const platform::Place& place) {
+  if (outs.empty()) {
+    return;
+  }
+  for (const auto& name_pair : outs) {
+    for (size_t i = 0; i < name_pair.second.size(); ++i) {
+      auto& template_var = name_pair.second[i];
+      if (template_var == nullptr) {
+        continue;
+      }
+      // const auto* tensor = GetTensorFromVar(template_var->Var());
+      const auto* debug_tensor = GetDebugTensorFromVar(template_var->Var());
+      auto& template_tmp_outs_var = (*tmp_outs)[name_pair.first][i];
+      const auto* tmp_outs_tensor =
+          GetTensorFromVar(template_tmp_outs_var->Var());
+      if (paddle::platform::is_in_xpu_debug_run_dev2_black_list(op_type)) {
+        tmp_outs_tensor = GetTensorFromVar(template_var->Var());
+      }
+      if (tmp_outs_tensor && tmp_outs_tensor->IsInitialized() &&
+          (tmp_outs_tensor->memory_size() != 0)) {
+        if (debug_tensor && debug_tensor->IsInitialized() &&
+            (debug_tensor->memory_size() != 0)) {
+          VLOG(10) << name_pair.first
+                   << " var_base_addr = " << template_var.get();
+          VLOG(10) << name_pair.first << "-"
+                   << GetNameFromVar(name_pair.second[i])
+                   << "  tmp_outs_tensor->memory_size() = "
+                   << tmp_outs_tensor->memory_size()
+                   << ", tmp_outs_tensor->meta() = " << tmp_outs_tensor->meta()
+                   << ", tmp_outs_tensor->data() = " << tmp_outs_tensor->data();
+          VLOG(10) << name_pair.first << "-"
+                   << GetNameFromVar(name_pair.second[i])
+                   << "     debug_tensor->memory_size() = "
+                   << debug_tensor->memory_size()
+                   << ",    debug_tensor->meta() = " << debug_tensor->meta()
+                   << ",    debug_tensor->data() = " << debug_tensor->data();
+
+          // const_cast<framework::Tensor*>(debug_tensor)->set_meta(tmp_outs_tensor->meta());
+          const_cast<framework::Tensor*>(debug_tensor)
+              ->set_meta(tmp_outs_tensor->meta());
+          paddle::framework::TensorCopySync(
+              *tmp_outs_tensor,
+              debug_tensor->place(),
+              const_cast<framework::Tensor*>(debug_tensor));
+          if (paddle::platform::is_in_xpu_debug_run_dev2_black_list(op_type)) {
+            // paddle::framework::TransformData(
+            //     *tmp_outs_tensor,
+            //     debug_tensor->place(),
+            //     const_cast<framework::Tensor*>(debug_tensor));
+            const auto* tmp_outs_tensor_ =
+                GetTensorFromVar(template_tmp_outs_var->Var());
+            const_cast<framework::Tensor*>(tmp_outs_tensor_)
+                ->ShareDataWith(*debug_tensor);
+          }
+        } else {
+          paddle::framework::SetVoidVariableDebug(template_var->MutableVar());
+          debug_tensor = GetDebugTensorFromVar(template_var->Var());
+          // const_cast<framework::Tensor*>(debug_tensor)->set_meta(tmp_outs_tensor->meta());
+          paddle::framework::TensorCopySync(
+              *tmp_outs_tensor,
+              place,
+              const_cast<framework::Tensor*>(debug_tensor));
+          VLOG(10) << name_pair.first << "-" << GetNameFromVar(template_var)
+                   << " debug_tensor not initial, copy from tmp_outs tensor";
+          if (paddle::platform::is_in_xpu_debug_run_dev2_black_list(op_type)) {
+            // const_cast<framework::Tensor*>(debug_tensor)->set_meta(tmp_outs_tensor->meta());
+            // paddle::framework::TensorCopySync(*tmp_outs_tensor, place,
+            // const_cast<framework::Tensor*>(debug_tensor));
+            const auto* tmp_outs_tensor_ =
+                GetTensorFromVar(template_tmp_outs_var->Var());
+            const_cast<framework::Tensor*>(tmp_outs_tensor_)
+                ->ShareDataWith(*debug_tensor);
+          }
+          // else {
+          // paddle::framework::TransformData(
+          //     *tmp_outs_tensor,
+          //     tmp_outs_tensor->place(),
+          //     const_cast<framework::Tensor*>(debug_tensor));
+          // const_cast<framework::Tensor*>(debug_tensor)
+          //     ->ShareDataWith(*tmp_outs_tensor);
+          // }
+        }
+        VLOG(3) << "Transform Variable " << GetNameFromVar(template_var)
+                << " from "
+                << "{data_type[" << tmp_outs_tensor->dtype()
+                << "]; data_layout[" << tmp_outs_tensor->layout() << "]; place["
+                << tmp_outs_tensor->place() << "]"
+                << " to "
+                << "]; place[" << debug_tensor->place() << "]";
+        VLOG(3) << GetNameFromVar(template_var)
+                << " memory size is: " << debug_tensor->memory_size();
+      } else {
+        if (template_var->Var().IsInitialized()) {
+          paddle::framework::SetVoidVariableDebug(template_var->MutableVar());
+        }
+      }
+      std::stringstream ss;
+      ss.str("");
+      // ss.clear();
+      ss << name_pair.first << "-" << GetNameFromVar(name_pair.second[i])
+         << "  dev1: ";
+      const auto* test_tensor = GetTensorFromVar(template_var->Var());
+      if (template_var->Var().IsInitialized()) {
+        ss << "var_addr:" << &template_var->Var() << " "
+           << "var_holder_:" << test_tensor << " ";
+        if (test_tensor && test_tensor->IsInitialized() &&
+            (test_tensor->memory_size() != 0)) {
+          ss << "tensor_addr:" << test_tensor << " "
+             << "tensor_place:" << test_tensor->place() << " "
+             << "tensor_meta = " << test_tensor->meta() << " "
+             << "tensor_data_addr:" << test_tensor->data() << std::endl;
+        } else {
+          ss << "NOT_INITED_TENSOR or NonTensor" << std::endl;
+        }
+      } else {
+        ss << "NOT_INITED_VAR " << std::endl;
+      }
+      VLOG(10) << ss.str();
+      ss.str("");
+      // ss.clear();
+
+      auto& test_var = (*tmp_outs)[name_pair.first][i];
+      test_tensor = GetTensorFromVar(test_var->Var());
+      ss << name_pair.first << "-" << GetNameFromVar(test_var);
+      ss << "   tmp: ";
+      if (test_var->Var().IsInitialized()) {
+        ss << "var_addr:" << &test_var << " "
+           << "var_holder_:" << test_tensor << " ";
+        if (test_tensor && test_tensor->IsInitialized() &&
+            (test_tensor->memory_size() != 0)) {
+          ss << "tensor_addr:" << test_tensor << " "
+             << "tensor_place:" << test_tensor->place() << " "
+             << "tensor_meta = " << test_tensor->meta() << " "
+             << "tensor_data_addr:" << test_tensor->data() << std::endl;
+        } else {
+          ss << "NOT_INITED_TENSOR or NonTensor" << std::endl;
+        }
+      } else {
+        ss << "NOT_INITED_VAR " << std::endl;
+      }
+      VLOG(10) << ss.str();
+      ss.str("");
+      // ss.clear();
+
+      test_tensor = GetDebugTensorFromVar(template_var->Var());
+      ss << name_pair.first << "-" << GetNameFromVar(name_pair.second[i])
+         << "  dev2: ";
+      if (template_var->Var().IsInitialized()) {
+        ss << "var_addr:" << &template_var->Var() << " "
+           << "var_holder_:" << test_tensor << " ";
+        if (test_tensor && test_tensor->IsInitialized() &&
+            (test_tensor->memory_size() != 0)) {
+          ss << "tensor_addr:" << test_tensor << " "
+             << "tensor_place:" << test_tensor->place() << " "
+             << "tensor_meta = " << test_tensor->meta() << " "
+             << "tensor_data_addr:" << test_tensor->data() << std::endl;
+        } else {
+          ss << "NOT_INITED_TENSOR or NonTensor" << std::endl;
+        }
+      } else {
+        ss << "NOT_INITED_VAR " << std::endl;
+      }
+      VLOG(10) << ss.str();
+      ss.str("");
+      // ss.clear();
     }
   }
   return;
@@ -385,6 +482,12 @@ std::shared_ptr<NameVarMap<VarType>> DebugPrepareData(
             if (debug_tensor && debug_tensor->IsInitialized() &&
                 (debug_tensor->memory_size() != 0)) {
               // tensor = debug_tensor;
+              if (std::getenv("XPU_PADDLE_DEBUG_OP") != nullptr) {
+                paddle::framework::TransformData(
+                    *tensor,
+                    expected_kernel_key.place_,
+                    const_cast<framework::Tensor*>(debug_tensor));
+              }
             } else {
               paddle::framework::SetVoidVariableDebug(cache_var->MutableVar());
               debug_tensor = GetDebugTensorFromVar(cache_var->Var());
