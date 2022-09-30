@@ -156,12 +156,12 @@ void SetTensorToVariable(const Variable &in_var,
   }
 }
 
-void TransformData(const Tensor &input_tensor,
+void TransformData(const phi::DenseTensor &input_tensor,
                    const paddle::platform::Place &dst_place,
-                   Tensor *output_tensor) {
-  Tensor in;
+                   phi::DenseTensor *output_tensor) {
+  phi::DenseTensor in;
   in.ShareDataWith(input_tensor);
-  Tensor out;
+  phi::DenseTensor out;
   TensorCopySync(in, dst_place, &out);
   out.set_meta(in.meta());
   PassTensorData(&out, &in);

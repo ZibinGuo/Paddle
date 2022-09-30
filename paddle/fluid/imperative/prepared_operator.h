@@ -134,14 +134,14 @@ std::shared_ptr<NameVarMap<VarType>> TemporaryData(
             //     *tensor, place,
             //     const_cast<framework::Tensor*>(debug_tensor));
             paddle::framework::TensorCopySync(
-                *tensor, place, const_cast<framework::Tensor*>(debug_tensor));
+                *tensor, place, const_cast<phi::DenseTensor*>(debug_tensor));
           }
           // tensor = debug_tensor;
         } else {
           paddle::framework::SetVoidVariableDebug(template_var->MutableVar());
           debug_tensor = GetDebugTensorFromVar(template_var->Var());
           paddle::framework::TransformData(
-              *tensor, place, const_cast<framework::Tensor*>(debug_tensor));
+              *tensor, place, const_cast<phi::DenseTensor*>(debug_tensor));
           VLOG(10) << name_pair.first << "-" << GetNameFromVar(template_var)
                    << " debug_tensor not initial, copy from source tensor";
           // tensor = debug_tensor;
@@ -314,12 +314,12 @@ void CopyOutputData(const std::string& op_type,
                    << ",    debug_tensor->data() = " << debug_tensor->data();
 
           // const_cast<framework::Tensor*>(debug_tensor)->set_meta(tmp_outs_tensor->meta());
-          const_cast<framework::Tensor*>(debug_tensor)
+          const_cast<phi::DenseTensor*>(debug_tensor)
               ->set_meta(tmp_outs_tensor->meta());
           paddle::framework::TensorCopySync(
               *tmp_outs_tensor,
               debug_tensor->place(),
-              const_cast<framework::Tensor*>(debug_tensor));
+              const_cast<phi::DenseTensor*>(debug_tensor));
           if (paddle::platform::is_in_xpu_debug_run_dev2_black_list(op_type)) {
             // paddle::framework::TransformData(
             //     *tmp_outs_tensor,
@@ -327,7 +327,7 @@ void CopyOutputData(const std::string& op_type,
             //     const_cast<framework::Tensor*>(debug_tensor));
             const auto* tmp_outs_tensor_ =
                 GetTensorFromVar(template_tmp_outs_var->Var());
-            const_cast<framework::Tensor*>(tmp_outs_tensor_)
+            const_cast<phi::DenseTensor*>(tmp_outs_tensor_)
                 ->ShareDataWith(*debug_tensor);
           }
         } else {
@@ -337,7 +337,7 @@ void CopyOutputData(const std::string& op_type,
           paddle::framework::TensorCopySync(
               *tmp_outs_tensor,
               place,
-              const_cast<framework::Tensor*>(debug_tensor));
+              const_cast<phi::DenseTensor*>(debug_tensor));
           VLOG(10) << name_pair.first << "-" << GetNameFromVar(template_var)
                    << " debug_tensor not initial, copy from tmp_outs tensor";
           if (paddle::platform::is_in_xpu_debug_run_dev2_black_list(op_type)) {
@@ -346,7 +346,7 @@ void CopyOutputData(const std::string& op_type,
             // const_cast<framework::Tensor*>(debug_tensor));
             const auto* tmp_outs_tensor_ =
                 GetTensorFromVar(template_tmp_outs_var->Var());
-            const_cast<framework::Tensor*>(tmp_outs_tensor_)
+            const_cast<phi::DenseTensor*>(tmp_outs_tensor_)
                 ->ShareDataWith(*debug_tensor);
           }
           // else {
@@ -486,7 +486,7 @@ std::shared_ptr<NameVarMap<VarType>> DebugPrepareData(
                 paddle::framework::TransformData(
                     *tensor,
                     expected_kernel_key.place_,
-                    const_cast<framework::Tensor*>(debug_tensor));
+                    const_cast<phi::DenseTensor*>(debug_tensor));
               }
             } else {
               paddle::framework::SetVoidVariableDebug(cache_var->MutableVar());
@@ -494,7 +494,7 @@ std::shared_ptr<NameVarMap<VarType>> DebugPrepareData(
               paddle::framework::TransformData(
                   *tensor,
                   expected_kernel_key.place_,
-                  const_cast<framework::Tensor*>(debug_tensor));
+                  const_cast<phi::DenseTensor*>(debug_tensor));
               // tensor = debug_tensor;
             }
             auto tmp_var =
@@ -504,7 +504,7 @@ std::shared_ptr<NameVarMap<VarType>> DebugPrepareData(
                 cache_var->Var(), *debug_tensor, tmp_var->MutableVar());
             (*tmp_ins_ptr)[name_pair.first][i] = tmp_var;
           } else {
-            framework::Tensor out;
+            phi::DenseTensor out;
             TransformData(
                 expected_kernel_key, kernel_type_for_var, *tensor, &out);
             if (NeedTransformDataType(kernel_type_for_var,
