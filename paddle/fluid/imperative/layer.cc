@@ -115,8 +115,8 @@ static std::string XPUDebugStartString(const std::string& op_type,
   if (ContinueOrNot(op_type)) {
     std::stringstream print_buffer;
     print_buffer << "op_name_debug " << op_type << " " << op_step_id << " "
-                 << prepared_op.kernel_type().place_ << " "
-                 << prepared_op.kernel_type().data_type_ << " in: ";
+                 << prepared_op.place() << " "
+                 << prepared_op.kernel_key().dtype() << " in: ";
     return print_buffer.str();
   } else {
     return "";
@@ -232,8 +232,8 @@ static void XPUPaddleOpTimeTok(const framework::OperatorBase& op,
   gettimeofday(&t2, NULL);
   uint32_t diff = 1000000 * (t2.tv_sec - t1.tv_sec) + t2.tv_usec - t1.tv_usec;
   std::cout << "op_name " << op.Type() << " " << diff << " "
-            << prepared_op.kernel_type().place_ << " "
-            << prepared_op.kernel_type().data_type_ << std::endl;
+            << prepared_op.place() << " " << prepared_op.kernel_key().dtype()
+            << std::endl;
 }
 
 static std::string XPUDebugDumpDataStart(const std::string& op_type,
@@ -243,9 +243,9 @@ static std::string XPUDebugDumpDataStart(const std::string& op_type,
     std::stringstream dump_file_dir_stream;
     const char* path_char = std::getenv("XPU_PADDLE_DUMP_DATA_PATH");
     std::string palce_str;
-    if (platform::is_cpu_place(prepared_op.kernel_type().place_)) {
+    if (platform::is_cpu_place(prepared_op.place())) {
       palce_str = "CPU";
-    } else if (platform::is_xpu_place(prepared_op.kernel_type().place_)) {
+    } else if (platform::is_xpu_place(prepared_op.place())) {
       palce_str = "XPU";
     } else {
       palce_str = "Unknow";
@@ -255,7 +255,7 @@ static std::string XPUDebugDumpDataStart(const std::string& op_type,
       dump_file_dir_stream << path_str << "/"
                            << "dump_data-" << op_type << "-" << op_step_id
                            << "-" << palce_str << "-"
-                           << prepared_op.kernel_type().data_type_ << debug_str
+                           << prepared_op.kernel_key().dtype() << debug_str
                            << ".txt";
     }
     return dump_file_dir_stream.str();
@@ -798,8 +798,11 @@ static void OpBaseRunImpl(const framework::OperatorBase& op,
                           paddle::platform::xpu_debug_run_dev2(),
                           attrs,
                           default_attrs);
-  auto tmp_ins_dev2_ptr = DebugPrepareData<VarType>(
-      *op_kernel, *ins_dev2_ptr, prepared_op_dev2.kernel_type());
+  auto tmp_ins_dev2_ptr =
+      DebugPrepareData<VarType>(*op_kernel,
+                                *ins_dev2_ptr,
+                                prepared_op_dev2.kernel_key(),
+                                prepared_op_dev2.place());
   VLOG(10) << "End prepare dev2!";
 
   std::string debug_str;
@@ -810,8 +813,8 @@ static void OpBaseRunImpl(const framework::OperatorBase& op,
                                debug_str,
                                ins,
                                *ins_dev2_ptr,
-                               prepared_op.kernel_type().place_,
-                               prepared_op_dev2.kernel_type().place_);
+                               prepared_op.place(),
+                               prepared_op_dev2.place());
     VLOG(10) << "End check mse for input!";
   }
 
@@ -849,7 +852,7 @@ static void OpBaseRunImpl(const framework::OperatorBase& op,
 
   if (DebugOrNot() && ContinueRunDev2OrNot(op.Type())) {
     VLOG(10) << "Strat run dev2";
-    if (paddle::platform::is_xpu_place(prepared_op.kernel_type().place_)) {
+    if (paddle::platform::is_xpu_place(prepared_op.place_())) {
       xpu_wait();
     }
     if (tmp_ins_dev2_ptr == nullptr) {
@@ -858,7 +861,7 @@ static void OpBaseRunImpl(const framework::OperatorBase& op,
       prepared_op_dev2.Run(
           *tmp_ins_dev2_ptr, *outs_dev2_ptr, attrs, default_attrs);
     }
-    if (paddle::platform::is_xpu_place(prepared_op_dev2.kernel_type().place_)) {
+    if (paddle::platform::is_xpu_place(prepared_op_dev2.place())) {
       xpu_wait();
     }
     VLOG(10) << "End run dev2";
@@ -876,8 +879,8 @@ static void OpBaseRunImpl(const framework::OperatorBase& op,
                                debug_str + " out: ",
                                outs,
                                *outs_dev2_ptr,
-                               prepared_op.kernel_type().place_,
-                               prepared_op_dev2.kernel_type().place_);
+                               prepared_op.place(),
+                               prepared_op_dev2.place());
     VLOG(10) << "End check mse for output!";
     if (debug_str != "") {
       std::cout << debug_str << std::endl;

@@ -450,7 +450,8 @@ template <typename VarType>
 std::shared_ptr<NameVarMap<VarType>> DebugPrepareData(
     const framework::OperatorWithKernel& op,
     const NameVarMap<VarType>& ins,
-    const framework::OpKernelType& expected_kernel_key) {
+    const phi::KernelKey& expected_kernel_key,
+    const phi::Place& place) {
   std::shared_ptr<NameVarMap<VarType>> tmp_ins_ptr = nullptr;
   for (const auto& name_pair : ins) {
     for (size_t i = 0; i < name_pair.second.size(); ++i) {
@@ -485,16 +486,14 @@ std::shared_ptr<NameVarMap<VarType>> DebugPrepareData(
               if (std::getenv("XPU_PADDLE_DEBUG_OP") != nullptr) {
                 paddle::framework::TransformData(
                     *tensor,
-                    expected_kernel_key.place_,
+                    place,
                     const_cast<phi::DenseTensor*>(debug_tensor));
               }
             } else {
               paddle::framework::SetVoidVariableDebug(cache_var->MutableVar());
               debug_tensor = GetDebugTensorFromVar(cache_var->Var());
               paddle::framework::TransformData(
-                  *tensor,
-                  expected_kernel_key.place_,
-                  const_cast<phi::DenseTensor*>(debug_tensor));
+                  *tensor, place, const_cast<phi::DenseTensor*>(debug_tensor));
               // tensor = debug_tensor;
             }
             auto tmp_var =
@@ -506,7 +505,7 @@ std::shared_ptr<NameVarMap<VarType>> DebugPrepareData(
           } else {
             phi::DenseTensor out;
             TransformData(
-                expected_kernel_key, kernel_type_for_var, *tensor, &out);
+                expected_kernel_key, kernel_type_for_var, *tensor, &out, place);
             if (NeedTransformDataType(kernel_type_for_var,
                                       expected_kernel_key)) {
               if (tmp_ins_ptr == nullptr) {
@@ -522,6 +521,9 @@ std::shared_ptr<NameVarMap<VarType>> DebugPrepareData(
               VLOG(3) << "Set cache to variable_wrapper: key="
                       << expected_kernel_key;
             } else {
+              // if dtype is same, transform inplace will not change the
+              // original
+              // value, transform inplace to avoid multiple copy
               SetTensorToVariable(
                   template_var->Var(), out, template_var->MutableVar());
             }
