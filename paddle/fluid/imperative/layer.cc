@@ -83,16 +83,34 @@ static framework::RuntimeContext PrepareRuntimeContext(
   return framework::RuntimeContext(std::move(inputs), std::move(outputs));
 }
 
+phi::Place& xpu_debug_run_dev2() {
+  static phi::Place dev2 = phi::CPUPlace();
+  static bool inited = false;
+  static std::string device = "CPU";
+  if (!inited) {
+    if (std::getenv("XPU_PADDLE_DEBUG_RUN_DEV2") != nullptr) {
+      std::string ops(std::getenv("XPU_PADDLE_DEBUG_RUN_DEV2"));
+      if (ops == "1") {
+        dev2 = phi::XPUPlace();
+        device = "XPU";
+      }
+    }
+    inited = true;
+    VLOG(3) << "XPU Paddle Debug Run Dev2: " << device;
+  }
+  return dev2;
+}
+
 bool ContinueOrNot(const std::string& op_type) {
   bool continue_or_not =
-      !paddle::platform::is_in_xpu_debug_black_list(op_type) &&
-      !paddle::platform::is_in_xpu_debug_black_id_list(
+      !phi::backends::xpu::is_in_xpu_debug_black_list(op_type) &&
+      !phi::backends::xpu::is_in_xpu_debug_black_id_list(
           std::to_string(op_step_id));
   continue_or_not = continue_or_not &&
-                    (paddle::platform::is_in_xpu_debug_white_list(op_type) ||
+                    (phi::backends::xpu::is_in_xpu_debug_white_list(op_type) ||
                      std::getenv("XPU_PADDLE_DEBUG_WHITE_LIST") == nullptr);
   continue_or_not = continue_or_not &&
-                    (paddle::platform::is_in_xpu_debug_white_id_list(
+                    (phi::backends::xpu::is_in_xpu_debug_white_id_list(
                          std::to_string(op_step_id)) ||
                      std::getenv("XPU_PADDLE_DEBUG_WHITE_ID_LIST") == nullptr);
   return continue_or_not;
@@ -100,7 +118,7 @@ bool ContinueOrNot(const std::string& op_type) {
 
 bool ContinueRunDev2OrNot(const std::string& op_type) {
   bool continue_or_not =
-      !paddle::platform::is_in_xpu_debug_run_dev2_black_list(op_type);
+      !phi::backends::xpu::is_in_xpu_debug_run_dev2_black_list(op_type);
   return continue_or_not;
 }
 
@@ -128,8 +146,8 @@ static std::string XPUDebugStringImpl(const std::string& op_type,
                                       const std::string& debug_str,
                                       const NameVarMap<VarType>& ins,
                                       const NameVarMap<VarType>& ins_dev2,
-                                      const platform::Place& place,
-                                      const platform::Place& place_dev2) {
+                                      const phi::Place& place,
+                                      const phi::Place& place_dev2) {
   std::stringstream print_buffer;
   print_buffer << debug_str;
   if (platform::is_xpu_place(place) || platform::is_xpu_place(place_dev2)) {
@@ -146,34 +164,46 @@ static std::string XPUDebugStringImpl(const std::string& op_type,
       const framework::Variable& var = pair.second[i]->Var();
       const framework::Variable& var_dev2 = ins_dev2.at(pair.first)[i]->Var();
       if (!var.IsInitialized()) {
-        print_buffer << "None NOT_INITED_VAR ";
-      } else if (var.IsType<framework::LoDTensor>()) {
-        auto& tensor = var.Get<framework::LoDTensor>();
-        auto& tensor_dev2 = var_dev2.Get<framework::LoDTensor>();
-        if (tensor.IsInitialized()) {
-          print_buffer << tensor.dtype() << "-" << tensor.place() << "-"
-                       << tensor_dev2.place() << " "
-                       << tensor.check_mse(tensor_dev2) << " ";
+        print_buffer << "NOT_INITED_VAR ";
+        // } else if (var.IsType<phi::DenseTensor>()) {
+        //   auto& tensor = var.Get<phi::DenseTensor>;
+        //   auto& tensor_dev2 = var_dev2.Get<phi::DenseTensor>;
+        //   if (tensor.IsInitialized()) {
+        //     print_buffer << tensor.dtype() << "-" << tensor.place() << "-"
+        //                  << tensor_dev2.place() << " "
+        //                  << tensor.check_mse(tensor_dev2) << " ";
+        //     //  << tensor_dev2.check_sum() << " ";
+        //   } else {
+        //     print_buffer << tensor.dtype() << " "
+        //                  << "NOT_INITED ";
+        //   }
+        // } else {
+        //   print_buffer << "None NonTensor ";
+        // }
+      } else {
+        const auto* tensor = GetTensorFromVar(var);
+        const auto* tensor_dev2 = GetTensorFromVar(var_dev2);
+        if (tensor && tensor->IsInitialized()) {
+          print_buffer << tensor->dtype() << "-" << tensor->place() << "-"
+                       << tensor_dev2->place() << " "
+                       << tensor->check_mse(*tensor_dev2) << " ";
           //  << tensor_dev2.check_sum() << " ";
         } else {
-          print_buffer << tensor.dtype() << " "
+          print_buffer << tensor->dtype() << " "
                        << "NOT_INITED ";
         }
-      } else {
-        print_buffer << "None NonTensor ";
       }
     }
   }
   return print_buffer.str();
 }
 
-std::string XPUDebugString(
-    const std::string& op_type,
-    const std::string& debug_str,
-    const NameVarMap<VarBase>& ins,
-    const NameVarMap<VarBase>& ins_dev2,
-    const platform::Place& place,
-    const platform::Place& place_dev2 = platform::CPUPlace()) {
+std::string XPUDebugString(const std::string& op_type,
+                           const std::string& debug_str,
+                           const NameVarMap<VarBase>& ins,
+                           const NameVarMap<VarBase>& ins_dev2,
+                           const phi::Place& place,
+                           const phi::Place& place_dev2 = phi::CPUPlace()) {
   if (ContinueOrNot(op_type)) {
     return XPUDebugStringImpl<VarBase>(
         op_type, debug_str, ins, ins_dev2, place, place_dev2);
@@ -182,13 +212,12 @@ std::string XPUDebugString(
   }
 }
 
-std::string XPUDebugString(
-    const std::string& op_type,
-    const std::string& debug_str,
-    const NameVarMap<VariableWrapper>& ins,
-    const NameVarMap<VariableWrapper>& ins_dev2,
-    const platform::Place& place,
-    const platform::Place& place_dev2 = platform::CPUPlace()) {
+std::string XPUDebugString(const std::string& op_type,
+                           const std::string& debug_str,
+                           const NameVarMap<VariableWrapper>& ins,
+                           const NameVarMap<VariableWrapper>& ins_dev2,
+                           const phi::Place& place,
+                           const phi::Place& place_dev2 = phi::CPUPlace()) {
   if (ContinueOrNot(op_type)) {
     return XPUDebugStringImpl<VariableWrapper>(
         op_type, debug_str, ins, ins_dev2, place, place_dev2);
@@ -197,13 +226,12 @@ std::string XPUDebugString(
   }
 }
 
-std::string XPUDebugString(
-    const std::string& op_type,
-    const std::string& debug_str,
-    const NameVarMap<egr::EagerVariable>& ins,
-    const NameVarMap<egr::EagerVariable>& ins_dev2,
-    const platform::Place& place,
-    const platform::Place& place_dev2 = platform::CPUPlace()) {
+std::string XPUDebugString(const std::string& op_type,
+                           const std::string& debug_str,
+                           const NameVarMap<egr::EagerVariable>& ins,
+                           const NameVarMap<egr::EagerVariable>& ins_dev2,
+                           const phi::Place& place,
+                           const phi::Place& place_dev2 = phi::CPUPlace()) {
   if (ContinueOrNot(op_type)) {
     return XPUDebugStringImpl<egr::EagerVariable>(
         op_type, debug_str, ins, ins_dev2, place, place_dev2);
@@ -284,13 +312,21 @@ static void XPUDebugDumpDataImpl(const std::string& op_type,
       if (pair.second[i] == nullptr) continue;
       const framework::Variable& var = pair.second[i]->Var();
       if (!var.IsInitialized()) {
-      } else if (var.IsType<framework::LoDTensor>()) {
-        auto& tensor = var.Get<framework::LoDTensor>();
-        if (tensor.IsInitialized()) {
+        // } else if (var.IsType<phi::DenseTensor>()) {
+        //   auto& tensor = var.Get<phi::DenseTensor>();
+        //   if (tensor.IsInitialized()) {
+        //     std::ofstream ofs(dump_data_path, std::ios::app);
+        //     ofs.precision(12);
+        //     ofs << pair.first << "--" << GetNameFromVar(pair.second[i]) << ":
+        //     "; ofs << tensor << "\n"; ofs.close();
+        //   }
+      } else {
+        const auto* tensor = GetTensorFromVar(var);
+        if (tensor && tensor->IsInitialized()) {
           std::ofstream ofs(dump_data_path, std::ios::app);
           ofs.precision(12);
           ofs << pair.first << "--" << GetNameFromVar(pair.second[i]) << ": ";
-          ofs << tensor << "\n";
+          ofs << *tensor << "\n";
           ofs.close();
         }
       }
@@ -352,7 +388,7 @@ static std::string DebugString(
       ss << "NOT_INITED_VAR";
     } else if (var.IsType<phi::DenseTensor>()) {
       auto& tensor = var.Get<phi::DenseTensor>();
-      ss << "LoDTensor<";
+      ss << "DenseTensor<";
       if (tensor.IsInitialized()) {
         ss << framework::DataTypeToString(
                   framework::TransToProtoVarType(tensor.dtype()))
@@ -782,22 +818,20 @@ static void OpBaseRunImpl(const framework::OperatorBase& op,
   std::shared_ptr<NameVarMap<VarType>> outs_dev2_ptr = nullptr;
   if (DebugOrNot()) {
     VLOG(10) << "Start copy input!";
-    ins_dev2_ptr =
-        TemporaryData<VarType>(ins, paddle::platform::xpu_debug_run_dev2());
+    ins_dev2_ptr = TemporaryData<VarType>(ins, xpu_debug_run_dev2());
     VLOG(10) << "End copy input!";
     VLOG(10) << "Start copy output!";
-    outs_dev2_ptr = TemporaryData<VarType>(
-        outs, paddle::platform::xpu_debug_run_dev2(), ins, ins_dev2_ptr);
+    outs_dev2_ptr =
+        TemporaryData<VarType>(outs, xpu_debug_run_dev2(), ins, ins_dev2_ptr);
     VLOG(10) << "End copy output!";
   }
   VLOG(10) << "Start prepare dev2!";
-  auto prepared_op_dev2 =
-      PreparedOp::Prepare(*ins_dev2_ptr,
-                          *outs_dev2_ptr,
-                          *op_kernel,
-                          paddle::platform::xpu_debug_run_dev2(),
-                          attrs,
-                          default_attrs);
+  auto prepared_op_dev2 = PreparedOp::Prepare(*ins_dev2_ptr,
+                                              *outs_dev2_ptr,
+                                              *op_kernel,
+                                              xpu_debug_run_dev2(),
+                                              attrs,
+                                              default_attrs);
   auto tmp_ins_dev2_ptr =
       DebugPrepareData<VarType>(*op_kernel,
                                 *ins_dev2_ptr,
@@ -830,7 +864,7 @@ static void OpBaseRunImpl(const framework::OperatorBase& op,
                        dump_data_dubug_path,
                        "input",
                        *ins_dev2_ptr,
-                       paddle::platform::xpu_debug_run_dev2());
+                       xpu_debug_run_dev2());
     }
   }
 
@@ -852,7 +886,7 @@ static void OpBaseRunImpl(const framework::OperatorBase& op,
 
   if (DebugOrNot() && ContinueRunDev2OrNot(op.Type())) {
     VLOG(10) << "Strat run dev2";
-    if (paddle::platform::is_xpu_place(prepared_op.place_())) {
+    if (paddle::platform::is_xpu_place(prepared_op.place())) {
       xpu_wait();
     }
     if (tmp_ins_dev2_ptr == nullptr) {
@@ -869,10 +903,8 @@ static void OpBaseRunImpl(const framework::OperatorBase& op,
 
   if (DebugOrNot()) {
     VLOG(10) << "Start copy output after dev2 run!";
-    CopyOutputData<VarType>(op.Type(),
-                            outs,
-                            outs_dev2_ptr.get(),
-                            paddle::platform::xpu_debug_run_dev2());
+    CopyOutputData<VarType>(
+        op.Type(), outs, outs_dev2_ptr.get(), xpu_debug_run_dev2());
     VLOG(10) << "End copy output after dev2 run!";
     VLOG(10) << "Start check mse for output!";
     debug_str = XPUDebugString(op.Type(),
@@ -894,7 +926,7 @@ static void OpBaseRunImpl(const framework::OperatorBase& op,
                        dump_data_dubug_path,
                        "output",
                        *outs_dev2_ptr,
-                       paddle::platform::xpu_debug_run_dev2());
+                       xpu_debug_run_dev2());
     }
   }
 

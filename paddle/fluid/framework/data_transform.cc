@@ -157,7 +157,7 @@ void SetTensorToVariable(const Variable &in_var,
 }
 
 void TransformData(const phi::DenseTensor &input_tensor,
-                   const paddle::platform::Place &dst_place,
+                   const phi::Place &dst_place,
                    phi::DenseTensor *output_tensor) {
   phi::DenseTensor in;
   in.ShareDataWith(input_tensor);
@@ -171,9 +171,9 @@ void TransformData(const phi::DenseTensor &input_tensor,
 }
 
 void CopyVoidVariable(const Variable &in_var, Variable *out_var) {
-  if (in_var.IsType<LoDTensor>()) {
-    auto &in_lod_tensor = in_var.DebugGet<LoDTensor>();
-    auto *tran_lod_tensor = out_var->GetMutable<LoDTensor>();
+  if (in_var.IsType<phi::DenseTensor>()) {
+    auto &in_lod_tensor = in_var.DebugGet<phi::DenseTensor>();
+    auto *tran_lod_tensor = out_var->GetMutable<phi::DenseTensor>();
     tran_lod_tensor->set_lod(in_lod_tensor.lod());
     tran_lod_tensor->set_layout(in_lod_tensor.layout());
     tran_lod_tensor->set_meta(in_lod_tensor.meta());
@@ -191,16 +191,17 @@ void CopyVoidVariable(const Variable &in_var, Variable *out_var) {
     // trans_selected_rows->mutable_value()->ShareDataWith(in_selected_rows.value());
   } else {
     PADDLE_THROW(platform::errors::Unavailable(
-        "Unsupported variable type, only supports LoDTensor or SelectedRows, "
+        "Unsupported variable type, only supports phi::DenseTensor or "
+        "SelectedRows, "
         "but the input variable type is %s.",
         ToTypeName(in_var.Type())));
   }
 }
 
 void SetVoidVariableDebug(Variable *in_var) {
-  if (in_var->IsType<LoDTensor>()) {
-    auto &in_lod_tensor = in_var->Get<LoDTensor>();
-    auto *tran_lod_tensor = in_var->DebugGetMutable<LoDTensor>();
+  if (in_var->IsType<phi::DenseTensor>()) {
+    auto &in_lod_tensor = in_var->Get<phi::DenseTensor>();
+    auto *tran_lod_tensor = in_var->DebugGetMutable<phi::DenseTensor>();
     // tran_lod_tensor->set_lod(in_lod_tensor.lod());
     // tran_lod_tensor->set_layout(in_lod_tensor.layout());
     tran_lod_tensor->set_meta(in_lod_tensor.meta());
@@ -219,7 +220,8 @@ void SetVoidVariableDebug(Variable *in_var) {
         in_selected_rows.value().meta());
   } else {
     PADDLE_THROW(platform::errors::Unavailable(
-        "Unsupported variable type, only supports LoDTensor or SelectedRows, "
+        "Unsupported variable type, only supports phi::DenseTensor or "
+        "SelectedRows, "
         "but the input variable type is %s.",
         ToTypeName(in_var->Type())));
   }

@@ -32,23 +32,6 @@ using vartype = paddle::framework::proto::VarType;
 using XPUOpListMap =
     std::unordered_map<std::string, std::vector<vartype::Type>>;
 
-bool is_xpu_support_op(const std::string& op_name, const pOpKernelType& type);
-bool is_in_xpu_black_list(const std::string& op_name);
-bool is_in_xpu_debug_black_list(const std::string& op_name);
-bool is_in_xpu_debug_black_id_list(const std::string& op_id);
-bool is_in_xpu_debug_white_list(const std::string& op_name);
-bool is_in_xpu_debug_white_id_list(const std::string& op_id);
-bool is_in_xpu_debug_run_dev2_black_list(const std::string& op_name);
-platform::Place& xpu_debug_run_dev2();
-
-#ifdef PADDLE_WITH_XPU_KP
-bool is_xpu_kp_support_op(const std::string& op_name,
-                          const pOpKernelType& type);
-bool is_in_xpu_kpwhite_list(const std::string& op_name);
-std::vector<vartype::Type> get_xpu_kp_op_support_type(
-    const std::string& op_name, phi::backends::xpu::XPUVersion version);
-#endif
-
 std::vector<vartype::Type> get_xpu_op_support_type(
     const std::string& op_name, phi::backends::xpu::XPUVersion version);
 XPUOpListMap get_xpu_op_list(phi::backends::xpu::XPUVersion version);

@@ -73,8 +73,8 @@ const phi::DenseTensor* GetTensorFromVar(const framework::Variable& var) {
 }
 
 const phi::DenseTensor* GetDebugTensorFromVar(const framework::Variable& var) {
-  if (var.DebugIsType<framework::LoDTensor>()) {
-    return &(var.DebugGet<framework::LoDTensor>());
+  if (var.DebugIsType<phi::DenseTensor>()) {
+    return &(var.DebugGet<phi::DenseTensor>());
   } else if (var.DebugIsType<phi::SelectedRows>()) {
     return &(var.DebugGet<phi::SelectedRows>().value());
   } else {

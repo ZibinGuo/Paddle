@@ -47,7 +47,7 @@ void SetTensorToVariable(const Variable &in_var,
                          Variable *out_var);
 
 void TransformData(const phi::DenseTensor &input_tensor,
-                   const paddle::platform::Place &dst_place,
+                   const phi::Place &dst_place,
                    phi::DenseTensor *output_tensor);
 
 void CopyVoidVariable(const Variable &in_var, Variable *out_var);

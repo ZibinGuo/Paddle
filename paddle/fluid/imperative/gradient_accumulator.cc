@@ -180,12 +180,12 @@ const TType& GetInnerDebugTensor(const framework::Variable& src) {
 
 template <typename TType>
 TType& GetInnerDebugTensor(const paddle::experimental::Tensor& src) {
-  PADDLE_ENFORCE_EQ(
-      src.initialized(),
-      true,
-      platform::errors::Fatal("We only add tensor with value if a tensor is "
-                              "NOT INITILIZED, it should just move instead of "
-                              "calling this method."));
+  PADDLE_ENFORCE_EQ(src.initialized(),
+                    true,
+                    platform::errors::Fatal(
+                        "We only add tensor with value if a debug tensor is "
+                        "NOT INITILIZED, it should just move instead of "
+                        "calling this method."));
   auto* src_tensor = static_cast<TType*>(src.impl().get());
   return *src_tensor;
 }
@@ -214,7 +214,7 @@ TType* GetEmptyInnerDebugTensor(paddle::experimental::Tensor* dst) {
       dst->defined(),
       false,
       platform::errors::Fatal(
-          "The underlying Tensor implementation should be nullptr"));
+          "The underlying debug Tensor implementation should be nullptr"));
   dst->set_impl(std::make_shared<TType>());
   auto* dst_tensor = static_cast<TType*>(dst->impl().get());
   return dst_tensor;
@@ -442,7 +442,8 @@ void TensorDebugAdd(const VarType& src, VarType* dst) {
       dst_tensor->numel(),
       numel,
       platform::errors::PreconditionNotMet(
-          "The number of elements of source tensor and destination tensor "
+          "The number of elements of source debug tensor and destination debug "
+          "tensor "
           "should be equal, but got the number of elements of source tensor is "
           "%zu and the number of elements of destination tensor is %zu.",
           numel,
@@ -451,12 +452,13 @@ void TensorDebugAdd(const VarType& src, VarType* dst) {
   auto data_type = framework::TransToProtoVarType(src_tensor.dtype());
   auto place = src_tensor.place();
 
-  PADDLE_ENFORCE_EQ(framework::TransToProtoVarType(dst_tensor->dtype()),
-                    data_type,
-                    platform::errors::PreconditionNotMet(
-                        "The data type of source tensor and destination tensor "
-                        "should be equal, Otherwise, the calculation results "
-                        "will be incorrect."));
+  PADDLE_ENFORCE_EQ(
+      framework::TransToProtoVarType(dst_tensor->dtype()),
+      data_type,
+      platform::errors::PreconditionNotMet(
+          "The data type of source debug tensor and destination debug tensor "
+          "should be equal, Otherwise, the calculation results "
+          "will be incorrect."));
 
   // if src and dst are in different place, copy dst to src's place
   if (dst_tensor->place() != place) {
@@ -566,7 +568,7 @@ void TensorDebugAdd(const VarType& src, VarType* dst) {
       XPUTensorAddFunctor<double>(place, src_tensor, dst_tensor);
     } else {
       PADDLE_THROW(platform::errors::Unimplemented(
-          "Gradient accumulation of data type (%s) on place (%s) is not "
+          "Gradient accumulation of debug data type (%s) on place (%s) is not "
           "supported in imperative mode",
           framework::DataTypeToString(data_type),
           place));
@@ -702,7 +704,7 @@ void SelectedRowsAddToDebugTensor(const VarType& src, VarType* dst) {
 #undef PADDLE_SELECTED_ROWS_ADD_TO_TENSOR
 
   PADDLE_THROW(platform::errors::InvalidArgument(
-      "Not supported data type %s for SelectedRowsAddToTensor",
+      "Not supported data type %s for SelectedRowsAddToDebugTensor",
       framework::DataTypeToString(data_type)));
 }
 
@@ -806,7 +808,7 @@ void SelectedRowsAddDebugTensor(const VarType& src_selected_rows_var,
 #endif
 
   PADDLE_THROW(platform::errors::InvalidArgument(
-      "Not supported data type %s for SelectedRowsAddToTensor",
+      "Not supported data type %s for SelectedRowsAddDebugTensor",
       framework::DataTypeToString(data_type)));
 
 #undef PADDLE_SELECTED_ROWS_ADD_TENSOR
@@ -960,7 +962,6 @@ void VariableWrapperAdd(std::shared_ptr<VariableWrapper> var,
     } else if (src.IsType<phi::SelectedRows>()) {
       SelectedRowsAddToTensor(src, dst);
       SelectedRowsAddToDebugTensor(src, dst);
-
     } else {
       PADDLE_THROW(platform::errors::InvalidArgument(
           "Unexpected branch, output variable type is %s",
@@ -1150,8 +1151,8 @@ void EagerGradientAccumulator::SumGrad(std::shared_ptr<VariableWrapper> var,
         !dst_var->Var().Get<phi::DenseTensor>().IsInitialized()) {
       VLOG(6) << "Set StopGradient Grad: " << dst_var->Name() << " as zero ";
       auto* dev_ctx = platform::DeviceContextPool::Instance().Get(place);
-      auto* dev2_ctx = platform::DeviceContextPool::Instance().Get(
-          paddle::platform::xpu_debug_run_dev2());
+      auto* dev2_ctx =
+          platform::DeviceContextPool::Instance().Get(xpu_debug_run_dev2());
       if (!dst_var->Var().IsInitialized()) {
         auto* tensor = dst_var->MutableVar()->GetMutable<phi::DenseTensor>();
         auto* debug_tensor =
@@ -1163,7 +1164,7 @@ void EagerGradientAccumulator::SumGrad(std::shared_ptr<VariableWrapper> var,
         tensor->mutable_data(place,
                              framework::TransToPhiDataType(var->DataType()));
         debug_tensor->mutable_data(
-            paddle::platform::xpu_debug_run_dev2(),
+            xpu_debug_run_dev2(),
             framework::TransToPhiDataType(var->DataType()));
         phi::funcs::set_constant(*dev_ctx, tensor, 0.0);
         phi::funcs::set_constant(*dev2_ctx, debug_tensor, 0.0);
@@ -1174,7 +1175,7 @@ void EagerGradientAccumulator::SumGrad(std::shared_ptr<VariableWrapper> var,
         tensor->mutable_data(place,
                              framework::TransToPhiDataType(var->DataType()));
         debug_tensor->mutable_data(
-            paddle::platform::xpu_debug_run_dev2(),
+            xpu_debug_run_dev2(),
             framework::TransToPhiDataType(var->DataType()));
         phi::funcs::set_constant(*dev_ctx, tensor, 0.0);
         phi::funcs::set_constant(*dev2_ctx, debug_tensor, 0.0);
@@ -1305,19 +1306,34 @@ void SortedGradientAccumulator::SumGrad(std::shared_ptr<VariableWrapper> var,
         !dst_var->Var().Get<phi::DenseTensor>().IsInitialized()) {
       VLOG(6) << "Set StopGradient Grad: " << var->Name() << " as zero";
       auto* dev_ctx = platform::DeviceContextPool::Instance().Get(place);
+      auto* dev2_ctx =
+          platform::DeviceContextPool::Instance().Get(xpu_debug_run_dev2());
       if (!dst_var->Var().IsInitialized()) {
         auto* tensor = dst_var->MutableVar()->GetMutable<phi::DenseTensor>();
+        auto* debug_tensor =
+            dst_var->MutableVar()->DebugGetMutable<phi::DenseTensor>();
         VLOG(6) << "Dims of " << dst_var->Name()
                 << " is set as: " << var->Var().Get<phi::DenseTensor>().dims();
         tensor->Resize(var->Var().Get<phi::DenseTensor>().dims());
+        debug_tensor->Resize(var->Var().Get<phi::DenseTensor>().dims());
         tensor->mutable_data(place,
                              framework::TransToPhiDataType(var->DataType()));
+        debug_tensor->mutable_data(
+            xpu_debug_run_dev2(),
+            framework::TransToPhiDataType(var->DataType()));
         phi::funcs::set_constant(*dev_ctx, tensor, 0.0);
+        phi::funcs::set_constant(*dev2_ctx, debug_tensor, 0.0);
       } else {
         auto* tensor = dst_var->MutableVar()->GetMutable<phi::DenseTensor>();
+        auto* debug_tensor =
+            dst_var->MutableVar()->DebugGetMutable<phi::DenseTensor>();
         tensor->mutable_data(place,
                              framework::TransToPhiDataType(var->DataType()));
+        debug_tensor->mutable_data(
+            xpu_debug_run_dev2(),
+            framework::TransToPhiDataType(var->DataType()));
         phi::funcs::set_constant(*dev_ctx, tensor, 0.0);
+        phi::funcs::set_constant(*dev2_ctx, debug_tensor, 0.0);
       }
     }
     // looks like tmp_grad_vars will not have any member but just in case

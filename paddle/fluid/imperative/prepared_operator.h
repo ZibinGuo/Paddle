@@ -291,7 +291,7 @@ void CopyOutputData(const std::string& op_type,
       auto& template_tmp_outs_var = (*tmp_outs)[name_pair.first][i];
       const auto* tmp_outs_tensor =
           GetTensorFromVar(template_tmp_outs_var->Var());
-      if (paddle::platform::is_in_xpu_debug_run_dev2_black_list(op_type)) {
+      if (phi::backends::xpu::is_in_xpu_debug_run_dev2_black_list(op_type)) {
         tmp_outs_tensor = GetTensorFromVar(template_var->Var());
       }
       if (tmp_outs_tensor && tmp_outs_tensor->IsInitialized() &&
@@ -320,7 +320,8 @@ void CopyOutputData(const std::string& op_type,
               *tmp_outs_tensor,
               debug_tensor->place(),
               const_cast<phi::DenseTensor*>(debug_tensor));
-          if (paddle::platform::is_in_xpu_debug_run_dev2_black_list(op_type)) {
+          if (phi::backends::xpu::is_in_xpu_debug_run_dev2_black_list(
+                  op_type)) {
             // paddle::framework::TransformData(
             //     *tmp_outs_tensor,
             //     debug_tensor->place(),
@@ -340,7 +341,8 @@ void CopyOutputData(const std::string& op_type,
               const_cast<phi::DenseTensor*>(debug_tensor));
           VLOG(10) << name_pair.first << "-" << GetNameFromVar(template_var)
                    << " debug_tensor not initial, copy from tmp_outs tensor";
-          if (paddle::platform::is_in_xpu_debug_run_dev2_black_list(op_type)) {
+          if (phi::backends::xpu::is_in_xpu_debug_run_dev2_black_list(
+                  op_type)) {
             // const_cast<framework::Tensor*>(debug_tensor)->set_meta(tmp_outs_tensor->meta());
             // paddle::framework::TensorCopySync(*tmp_outs_tensor, place,
             // const_cast<framework::Tensor*>(debug_tensor));
@@ -461,7 +463,8 @@ std::shared_ptr<NameVarMap<VarType>> DebugPrepareData(
       if (tensor && tensor->IsInitialized() && (tensor->memory_size() != 0)) {
         auto kernel_type_for_var = op.GetKernelTypeForVar(
             name_pair.first, *tensor, expected_kernel_key);
-        if (!NeedTransform(kernel_type_for_var, expected_kernel_key)) {
+        if (!framework::NeedTransform(kernel_type_for_var,
+                                      expected_kernel_key)) {
           continue;
         } else {
           VLOG(3) << "Transform Variable " << GetNameFromVar(template_var)
@@ -484,7 +487,7 @@ std::shared_ptr<NameVarMap<VarType>> DebugPrepareData(
                 (debug_tensor->memory_size() != 0)) {
               // tensor = debug_tensor;
               if (std::getenv("XPU_PADDLE_DEBUG_OP") != nullptr) {
-                paddle::framework::TransformData(
+                framework::TransformData(
                     *tensor,
                     place,
                     const_cast<phi::DenseTensor*>(debug_tensor));
@@ -492,7 +495,7 @@ std::shared_ptr<NameVarMap<VarType>> DebugPrepareData(
             } else {
               paddle::framework::SetVoidVariableDebug(cache_var->MutableVar());
               debug_tensor = GetDebugTensorFromVar(cache_var->Var());
-              paddle::framework::TransformData(
+              framework::TransformData(
                   *tensor, place, const_cast<phi::DenseTensor*>(debug_tensor));
               // tensor = debug_tensor;
             }
@@ -504,10 +507,10 @@ std::shared_ptr<NameVarMap<VarType>> DebugPrepareData(
             (*tmp_ins_ptr)[name_pair.first][i] = tmp_var;
           } else {
             phi::DenseTensor out;
-            TransformData(
+            framework::TransformData(
                 expected_kernel_key, kernel_type_for_var, *tensor, &out, place);
-            if (NeedTransformDataType(kernel_type_for_var,
-                                      expected_kernel_key)) {
+            if (framework::NeedTransformDataType(kernel_type_for_var,
+                                                 expected_kernel_key)) {
               if (tmp_ins_ptr == nullptr) {
                 tmp_ins_ptr = std::make_shared<NameVarMap<VarType>>(ins);
               }

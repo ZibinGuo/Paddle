@@ -159,8 +159,8 @@ void BasicEngine::CheckBackwardInputs(const OpBase& op) {
 
       if (tensor && !tensor->IsInitialized()) {
         auto* dev_ctx = platform::DeviceContextPool::Instance().Get(op.place());
-        auto* dev2_ctx = platform::DeviceContextPool::Instance().Get(
-            paddle::platform::xpu_debug_run_dev2());
+        auto* dev2_ctx =
+            platform::DeviceContextPool::Instance().Get(xpu_debug_run_dev2());
         // NOTE(zhiqiu): since grad variable is ungenerated, so the dtype is not
         // correct. var->DataType() returns the default dtype, which is float32.
         // Here, we use the type of the corresponding forward datatype.
@@ -168,7 +168,7 @@ void BasicEngine::CheckBackwardInputs(const OpBase& op) {
         tensor->mutable_data(
             op.place(), framework::TransToPhiDataType(var->ForwardDataType()));
         debug_tensor->mutable_data(
-            paddle::platform::xpu_debug_run_dev2(),
+            xpu_debug_run_dev2(),
             framework::TransToPhiDataType(var->ForwardDataType()));
         VLOG(6) << "Set ungenerated Grad: " << var->Name()
                 << " as zero with dtype "
@@ -364,8 +364,7 @@ static void PerformBackwardInplace(const std::string& op_type,
     auto in_to_outs = infer_inplace(true);
     for (auto& pair : in_to_outs) {
       phi::DenseTensor *in_tensor = nullptr, *out_tensor = nullptr;
-      phi::DenseTensor *in_debug_tensor = nullptr,
-                       *out_debug_tensor = nullptr;
+      phi::DenseTensor *in_debug_tensor = nullptr, *out_debug_tensor = nullptr;
       for (auto& p : ins) {
         if (p.first == pair.first) {
           // has at least one var
@@ -377,8 +376,8 @@ static void PerformBackwardInplace(const std::string& op_type,
               if (IsInputCanInplace(in_var)) {
                 in_tensor =
                     in_var->MutableVar()->GetMutable<phi::DenseTensor>();
-                in_debug_tensor = in_var->MutableVar()
-                                      ->DebugGetMutable<phi::DenseTensor>();
+                in_debug_tensor =
+                    in_var->MutableVar()->DebugGetMutable<phi::DenseTensor>();
               }
             }
           }
@@ -394,8 +393,8 @@ static void PerformBackwardInplace(const std::string& op_type,
             if (out_var->Type() == framework::proto::VarType::LOD_TENSOR) {
               out_tensor =
                   out_var->MutableVar()->GetMutable<phi::DenseTensor>();
-              out_debug_tensor = out_var->MutableVar()
-                                     ->DebugGetMutable<phi::DenseTensor>();
+              out_debug_tensor =
+                  out_var->MutableVar()->DebugGetMutable<phi::DenseTensor>();
             }
           }
         }

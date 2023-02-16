@@ -173,6 +173,12 @@ template <typename ReturnVarType, typename VarType>
 std::shared_ptr<ReturnVarType> SelectedRowsMerge(const VarType& src1,
                                                  const VarType& src2);
 
+template <typename ReturnVarType, typename VarType>
+std::shared_ptr<ReturnVarType> SelectedRowsDebugMerge(
+    const VarType& src1,
+    const VarType& src2,
+    std::shared_ptr<ReturnVarType> dst_var);
+
 template <typename VarType>
 void SelectedRowsAddToTensor(const VarType& src, VarType* dst);
 

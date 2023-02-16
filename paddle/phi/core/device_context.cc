@@ -149,6 +149,7 @@ struct DeviceContext::Impl {
     if (tensor->initialized() && tensor->place() != place) {
       ClearHolder(tensor);
     }
+    // 正常情况 allocator = device_allocator_;
     auto* allocator =
         (tensor->numel() == 0 || fake_alloc) && requested_size == 0
             ? zero_allocator_
