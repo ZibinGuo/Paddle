@@ -185,6 +185,7 @@ void RoiAlignKernel(const Context& dev_ctx,
                     int sampling_ratio,
                     bool aligned,
                     DenseTensor* out) {
+  // std::cout << "====roi_align_cpu start====" << std::endl;
   auto in_dims = x.dims();
   int batch_size = in_dims[0];
   int channels = in_dims[1];
@@ -255,6 +256,12 @@ void RoiAlignKernel(const Context& dev_ctx,
     }
   }
   T* output_data = dev_ctx.template Alloc<T>(out);
+  // std::cout << "boxes.initialized() = " << boxes.initialized() << std::endl;
+  // std::cout << "boxes.holder_or_not(): " << boxes.IsInitialized() <<
+  // std::endl; if (boxes.IsInitialized()) {
+  //   std::cout << "boxes.holder_ptr_or_not(): " << boxes.holder_ptr_or_not()
+  //   << std::endl;
+  // }
   const T* boxes_data = boxes.data<T>();
   T roi_offset = aligned ? T(0.5) : 0;
   for (int n = 0; n < rois_num; ++n) {
@@ -306,6 +313,7 @@ void RoiAlignKernel(const Context& dev_ctx,
     }
     boxes_data += roi_stride[0];
   }
+  // std::cout << "====roi_align_cpu end====" << std::endl;
 }
 
 }  // namespace phi

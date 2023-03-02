@@ -14,6 +14,7 @@ limitations under the License. */
 
 #include "paddle/phi/api/lib/tensor_copy.h"
 
+#include "paddle/fluid/framework/tensor_util.h"
 #include "paddle/phi/api/include/context_pool.h"
 #include "paddle/phi/api/lib/api_gen_utils.h"
 #include "paddle/phi/api/lib/kernel_dispatch.h"
@@ -23,31 +24,353 @@ limitations under the License. */
 #include "paddle/phi/core/tensor_utils.h"
 #include "paddle/phi/infermeta/unary.h"
 
+// std::string debug_start_str = "";
+
 namespace paddle {
 namespace experimental {
+static int64_t op_id = 0;
+struct timeval t1;
+struct timeval t2;
+
+void XPUPaddleOpTimeTik() {
+  if (std::getenv("XPU_PADDLE_OP_TIME") != nullptr) {
+    gettimeofday(&t1, NULL);
+  }
+}
+
+void XPUPaddleOpTimeTok(const std::string& op_name,
+                        const phi::DeviceContext* dev_ctx,
+                        const Backend& dev_place,
+                        const DataType& kernel_data_type) {
+  // 耗时统计逻辑
+  if (std::getenv("XPU_PADDLE_OP_TIME") != nullptr) {
+    if (platform::is_xpu_place(phi::TransToPhiPlace(dev_place))) {
+      dev_ctx->Wait();
+    }
+    gettimeofday(&t2, NULL);
+    uint32_t diff = 1000000 * (t2.tv_sec - t1.tv_sec) + t2.tv_usec - t1.tv_usec;
+    std::cout << "op_name " << phi::TransToFluidOpName(op_name) << " " << diff
+              << " " << dev_place << " " << kernel_data_type << std::endl;
+  }
+}
+
+int64_t OpId() { return op_id++; }
+
+phi::Place& xpu_debug_run_dev2() {
+  static phi::Place dev2 = phi::CPUPlace();
+  static bool inited = false;
+  static std::string device = "CPU";
+  if (!inited) {
+    if (std::getenv("XPU_PADDLE_DEBUG_RUN_DEV2") != nullptr) {
+      std::string ops(std::getenv("XPU_PADDLE_DEBUG_RUN_DEV2"));
+      if (ops == "1") {
+        dev2 = phi::XPUPlace();
+        device = "XPU";
+      }
+    }
+    inited = true;
+    VLOG(3) << "XPU Paddle Debug Run Dev2: " << device;
+  }
+  return dev2;
+}
+
+bool ContinueOrNot(const std::string& op_name) {
+  auto fluid_name = phi::TransToFluidOpName(op_name);
+  bool continue_or_not =
+      !phi::backends::xpu::is_in_xpu_debug_black_list(fluid_name) &&
+      !phi::backends::xpu::is_in_xpu_debug_black_id_list(std::to_string(op_id));
+  continue_or_not =
+      continue_or_not &&
+      (phi::backends::xpu::is_in_xpu_debug_white_list(fluid_name) ||
+       std::getenv("XPU_PADDLE_DEBUG_WHITE_LIST") == nullptr);
+  continue_or_not = continue_or_not &&
+                    (phi::backends::xpu::is_in_xpu_debug_white_id_list(
+                         std::to_string(op_id)) ||
+                     std::getenv("XPU_PADDLE_DEBUG_WHITE_ID_LIST") == nullptr);
+  return continue_or_not;
+}
+
+bool ContinueRunDev2OrNot(const std::string& op_name) {
+  auto fluid_name = phi::TransToFluidOpName(op_name);
+  bool continue_or_not =
+      !phi::backends::xpu::is_in_xpu_debug_run_dev2_black_list(fluid_name);
+  return continue_or_not;
+}
+
+bool DebugOrNot() {
+  bool continue_or_not = (std::getenv("XPU_PADDLE_DEBUG_GLOBAL") != nullptr ||
+                          std::getenv("XPU_PADDLE_DEBUG_OP") != nullptr);
+  return continue_or_not;
+}
+
+std::string XPUDebugStartString(const std::string& op_name,
+                                const Backend& dev_place,
+                                const DataType& kernel_data_type) {
+  if (ContinueOrNot(op_name)) {
+    std::stringstream print_buffer;
+    print_buffer << "op_name_debug " << phi::TransToFluidOpName(op_name) << " "
+                 << op_id << " " << kernel_data_type << " " << dev_place << " ";
+    //  << dev_place << " "
+    //  << kernel_data_type << " in: ";
+    return print_buffer.str();
+  } else {
+    return "";
+  }
+}
+
+static std::string XPUDebugStringImpl(const std::string& tensor_name,
+                                      const Tensor& a,
+                                      const Tensor& b) {
+  std::stringstream print_buffer;
+  print_buffer << tensor_name << "-";
+  if (a.name() == "") {
+    print_buffer << "None-";
+  } else {
+    print_buffer << a.name() << "-";
+  }
+  // VLOG(10) << print_buffer.str();
+  if (a.defined()) {
+    if (a.initialized()) {
+      print_buffer << a.dtype() << "-" << a.place().DebugString() << "-"
+                   << b.place().DebugString() << "-" << check_mse(a, b) << " ";
+
+    } else {
+      print_buffer << "NOT_INITED ";
+    }
+  } else {
+    print_buffer << "NOT_INITED_VAR ";
+  }
+  // VLOG(10) << print_buffer.str();
+  return print_buffer.str();
+}
+
+std::string XPUDebugString(const std::string& op_name,
+                           const std::string& tensor_name,
+                           const Tensor& a,
+                           const Tensor& b) {
+  if (ContinueOrNot(op_name)) {
+    std::string tmp = XPUDebugStringImpl(tensor_name, a, b);
+    VLOG(10) << tmp;
+    return tmp;
+  } else {
+    return "";
+  }
+}
+
+std::string XPUDebugString(const std::string& op_name,
+                           const std::string& tensor_name,
+                           const optional<Tensor>& a,
+                           const optional<Tensor>& b) {
+  if (a) {
+    std::string tmp = XPUDebugString(op_name, tensor_name, *a, *b);
+    return tmp;
+  } else {
+    return tensor_name + "-NOT_INITED_VAR ";
+  }
+}
+
+std::string XPUDebugString(const std::string& op_name,
+                           const std::string& tensor_name,
+                           const std::vector<Tensor>& a,
+                           const std::vector<Tensor>& b) {
+  std::string tensors_str = "vector:{";
+  if (ContinueOrNot(op_name)) {
+    for (size_t i = 0; i < a.size(); i++) {
+      tensors_str += XPUDebugStringImpl(tensor_name, a[i], b[i]);
+    }
+    std::string tmp = tensors_str + "} ";
+    VLOG(10) << tmp;
+    return tmp;
+  } else {
+    return "";
+  }
+}
+
+std::string XPUDebugString(const std::string& op_name,
+                           const std::string& tensor_name,
+                           const optional<std::vector<Tensor>>& a,
+                           const optional<std::vector<Tensor>>& b) {
+  // return XPUDebugString(op_name, tensor_name, *a, *b);
+  if (a) {
+    return XPUDebugString(op_name, tensor_name, *a, *b);
+  } else {
+    return tensor_name + "-NOT_INITED_VAR ";
+  }
+}
 
 void copy(const Tensor& src, const Place& place, bool blocking, Tensor* dst) {
   auto kernel_key_set = ParseKernelKeyByInputArgs(src);
   kernel_key_set.backend_set =
       kernel_key_set.backend_set | BackendSet(phi::TransToPhiBackend(place));
   auto kernel_key = kernel_key_set.GetHighestPriorityKernelKey();
-
-  VLOG(6) << "start copy. ";
-
   auto target_place = phi::TransToPhiPlace(kernel_key.backend());
   auto& pool = paddle::experimental::DeviceContextPool::Instance();
   auto* dev_ctx = pool.GetMutable(
       target_place.GetType() == place.GetType() ? place : target_place);
-
   auto dense_x = TensorToDenseTensor(src);
+  VLOG(11) << "dense_x->initialized(): " << dense_x->initialized();
+  VLOG(11) << "dense_x->holder_or_not(): " << dense_x->IsInitialized();
+  if (dense_x->IsInitialized()) {
+    VLOG(11) << "dense_x->holder_ptr_or_not(): "
+             << dense_x->holder_ptr_or_not();
+  }
+  VLOG(11) << "dense_x->meta(): " << dense_x->meta();
 
   auto kernel_out = SetKernelOutput(dst);
   phi::MetaTensor meta_out(kernel_out);
   phi::UnchangedInferMeta(*dense_x, &meta_out);
+  VLOG(11) << "kernel_out->meta(): " << kernel_out->meta();
 
-  phi::Copy(*dev_ctx, *dense_x, place, blocking, kernel_out);
+  VLOG(6) << "start copy. ";
+
+  if (dense_x->initialized()) {
+    phi::Copy(*dev_ctx, *dense_x, place, blocking, kernel_out);
+    VLOG(11) << "dense_x->place(): " << dense_x->place();
+    VLOG(11) << "kernel_out->place(): " << kernel_out->place();
+  } else {
+    if (dense_x->IsInitialized()) {
+      dev_ctx->Alloc(kernel_out, kernel_out->dtype());
+    }
+  }
 
   VLOG(6) << "copy finished. ";
+}
+
+void copy(const std::vector<Tensor>& src,
+          const Place& place,
+          bool blocking,
+          std::vector<Tensor>* dst) {
+  // std::vector<paddle::experimental::Tensor> result;
+  for (size_t i = 0; i < src.size(); i++) {
+    auto src_tensor = src[i];
+    auto dst_tensor = (*dst)[i];
+    copy(src_tensor, place, blocking, &dst_tensor);
+    dst->emplace_back(dst_tensor);
+  }
+}
+
+// void copy(const std::vector<Tensor*> src,
+//           const Place& place,
+//           bool blocking,
+//           std::vector<Tensor*> dst) {
+//   // std::vector<paddle::experimental::Tensor> result;
+//   for (size_t i = 0; i < src.size(); i++) {
+//     auto src_tensor = *src[i];
+//     paddle::experimental::Tensor dst_tensor;
+//     copy(src_tensor, place, blocking, &dst_tensor);
+//     dst.emplace_back(&dst_tensor);
+//   }
+// }
+
+void copy(const paddle::optional<Tensor>& src,
+          const Place& place,
+          bool blocking,
+          paddle::optional<Tensor>* dst) {
+  // in ? copy(*src, place, blocking, &(*dst)) : dst.destroy();
+  if (src) {
+    copy(*src, place, blocking, &(*(*dst)));
+  } else {
+    dst->reset();
+  }
+}
+
+void copy(const optional<std::vector<Tensor>>& src,
+          const Place& place,
+          bool blocking,
+          optional<std::vector<Tensor>>* dst) {
+  if (src) {
+    copy(*src, place, blocking, *(*dst));
+  } else {
+    dst.reset();
+  }
+}
+
+// std::shared_ptr<Tensor> copy(const Tensor& src,
+//                              const Place& place,
+//                              bool blocking) {
+//   Tensor dst;
+//   copy(src, place, blocking, &dst);
+//   return std::make_shared<Tensor>(dst);
+// }
+
+// std::shared_ptr<Tensor> copy(const Tensor* src, const Place& place, bool
+// blocking) {
+//   Tensor dst;
+//   copy(src, place, blocking, &dst);
+//   return std::make_shared<Tensor>(dst);
+// }
+
+// std::shared_ptr<std::vector<Tensor>> copy(const std::vector<Tensor>& src,
+//                                           const Place& place,
+//                                           bool blocking) {
+//   std::vector<Tensor> dst;
+//   copy(src, place, blocking, dst);
+//   return std::make_shared<std::vector<Tensor>>(dst);
+// }
+
+// std::shared_ptr<std::vector<Tensor*>> copy(const std::vector<Tensor*> src,
+// const Place& place, bool blocking) {
+//   std::vector<Tensor*> dst;
+//   copy(src, place, blocking, dst);
+//   return std::make_shared<std::vector<Tensor*>>(dst);
+// }
+
+// std::shared_ptr<paddle::optional<Tensor>> copy(
+//     const paddle::optional<Tensor>& src, const Place& place, bool blocking) {
+//   Tensor dst_tmp;
+//   paddle::optional<Tensor> dst(dst_tmp);
+//   copy(src, place, blocking, dst);
+//   return std::make_shared<paddle::optional<Tensor>>(dst);
+// }
+
+// std::shared_ptr<paddle::optional<std::vector<Tensor>>> copy(
+//     const optional<std::vector<Tensor>>& src,
+//     const Place& place,
+//     bool blocking) {
+//   std::vector<Tensor> dst_tmp;
+//   paddle::optional<std::vector<Tensor>> dst(dst_tmp);
+//   copy(src, place, blocking, dst);
+//   return std::make_shared<paddle::optional<std::vector<Tensor>>>(dst);
+// }
+
+std::string check_mse(const Tensor& a, const Tensor& b) {
+  // return a.check_mse(b);
+  if (a.is_dense_tensor()) {
+    // return static_cast<phi::DenseTensor *>(impl_.get())->data<T>();
+    return std::to_string(
+        static_cast<phi::DenseTensor*>(a.impl().get())
+            ->check_mse(*(static_cast<phi::DenseTensor*>(b.impl().get()))));
+  } else if (a.is_selected_rows()) {
+    // return static_cast<phi::SelectedRows *>(impl_.get())->value().data<T>();
+    return std::to_string(
+        static_cast<phi::SelectedRows*>(a.impl().get())
+            ->value()
+            .check_mse(
+                static_cast<phi::SelectedRows*>(b.impl().get())->value()));
+  }
+  return "NOT_DENSETENSOER";
+}
+
+std::string check_mse(const paddle::optional<Tensor>& a,
+                      const paddle::optional<Tensor>& b) {
+  return a ? check_mse(*a, *b) : "NOT_INIT";
+}
+
+std::string check_mse(const std::vector<paddle::experimental::Tensor>& a,
+                      const std::vector<paddle::experimental::Tensor>& b) {
+  double result = 0;
+  for (size_t i = 0; i < a.size(); i++) {
+    auto a_tensor = a[i];
+    auto b_tensor = b[i];
+    result += a_tensor.check_mse(b_tensor);
+  }
+  return a.size() > 0 ? std::to_string(result / a.size()) : "NOT_INIT";
+}
+
+std::string check_mse(
+    const optional<std::vector<paddle::experimental::Tensor>>& a,
+    const optional<std::vector<paddle::experimental::Tensor>>& b) {
+  return a ? check_mse(*a, *b) : "NOT_INIT";
 }
 
 }  // namespace experimental

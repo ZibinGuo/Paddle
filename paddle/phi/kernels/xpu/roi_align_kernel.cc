@@ -32,6 +32,7 @@ void RoiAlignKernel(const Context& dev_ctx,
                     int sampling_ratio,
                     bool aligned,
                     DenseTensor* out) {
+  // std::cout << "====roi_align_xpu start====" << std::endl;
   const auto& in_dims = x.dims();
   int batch_size = in_dims[0];
   int channels = in_dims[1];
@@ -142,6 +143,7 @@ void RoiAlignKernel(const Context& dev_ctx,
     dev_ctx.Wait();
   }
   xpu_free(roi_id_data);
+  // std::cout << "====roi_align_xpu end====" << std::endl;
 }
 
 }  // namespace phi

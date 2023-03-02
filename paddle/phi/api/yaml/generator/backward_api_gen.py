@@ -90,14 +90,14 @@ class BackwardAPI(BaseAPI):
              Please check the output of {self.api} in yaml."
 
     def get_declare_args(self, inplace_flag=False):
-        return self.get_define_args()
+        return self.get_define_args() + " = false"
 
     def get_define_args(self, inplace_flag=False):
         out_type_map = {
             'Tensor': 'Tensor*',
             'std::vector<Tensor>': 'std::vector<Tensor*>',
         }
-        intputs_and_attrs = super().get_define_args()
+        intputs_and_attrs = super().get_define_args()[:-19]
         outs = []
         for i, name in enumerate(self.outputs['names']):
             outs.append(
@@ -105,7 +105,9 @@ class BackwardAPI(BaseAPI):
                 + ' '
                 + name.split('@')[0]
             )
-        result = intputs_and_attrs + ', ' + ", ".join(outs)
+        result = (
+            intputs_and_attrs + ', ' + ", ".join(outs) + ', bool debug_or_not'
+        )
         return result
 
     def gene_return_code(self):
@@ -287,6 +289,7 @@ def source_include(header_file_path):
 
 #include "paddle/fluid/platform/profiler/event_tracing.h"
 #include "paddle/fluid/platform/profiler/supplement_tracing.h"
+#include "paddle/phi/api/lib/tensor_copy.h"
 
 DECLARE_bool(conv2d_disable_cudnn);
 """
@@ -295,6 +298,7 @@ DECLARE_bool(conv2d_disable_cudnn);
 def backward_api_namespace():
     return (
         """
+extern std::string debug_start_str;
 namespace paddle {
 namespace experimental {
 

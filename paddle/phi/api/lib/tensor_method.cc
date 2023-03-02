@@ -29,8 +29,11 @@ limitations under the License. */
 namespace paddle {
 namespace experimental {
 // declare cast api
-Tensor cast(const Tensor &x, DataType out_dtype);
-Tensor copy_to(const Tensor &x, const Place &place, bool blocking);
+Tensor cast(const Tensor &x, DataType out_dtype, bool debug_or_not = false);
+Tensor copy_to(const Tensor &x,
+               const Place &place,
+               bool blocking,
+               bool debug_or_not = false);
 
 Tensor Tensor::cast(DataType target_type) const {
   return experimental::cast(*this, target_type);
