@@ -129,6 +129,10 @@ KernelResult KernelFactory::SelectKernelOrThrowError(
   }
 #endif
   auto kernel_iter = iter->second.find(kernel_key);
+  VLOG(11) << "kernel_iter == iter->second.end()? "
+           << (kernel_iter == iter->second.end());
+  VLOG(11) << "kernel_key.backend() == Backend::CPU? "
+           << (kernel_key.backend() == Backend::CPU);
 
   PADDLE_ENFORCE_NE(
       kernel_iter == iter->second.end() && kernel_key.backend() == Backend::CPU,

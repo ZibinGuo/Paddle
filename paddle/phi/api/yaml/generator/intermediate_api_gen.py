@@ -54,6 +54,7 @@ def source_include(header_file_path):
 
 #include "paddle/fluid/platform/profiler/event_tracing.h"
 #include "paddle/fluid/platform/profiler/supplement_tracing.h"
+#include "paddle/phi/api/lib/tensor_copy.h"
 """
 
 

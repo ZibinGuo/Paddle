@@ -14,6 +14,8 @@ limitations under the License. */
 
 #include "paddle/phi/core/dense_tensor.h"
 
+#include "paddle/fluid/platform/device/device_wrapper.h"
+#include "paddle/fluid/platform/device_context.h"
 #include "paddle/phi/common/bfloat16.h"
 #include "paddle/phi/common/complex.h"
 #include "paddle/phi/common/float16.h"
@@ -110,6 +112,7 @@ void* DenseTensor::AllocateFrom(Allocator* allocator,
   }
 
   size_t bytes = numel() * SizeOf(this->dtype());
+  // std::cout << "bytes = " << bytes << std::endl;
 
   if (fake_alloc) {
     bytes = 0;
@@ -288,6 +291,108 @@ bool DenseTensor::storage_properties_initialized() const {
 void DenseTensor::set_storage_properties(
     std::unique_ptr<StorageProperties>&& storage_properties) {
   storage_properties_ = std::move(storage_properties);
+}
+
+template <typename T>
+double DenseTensor::check_sum_impl() const {
+  double result = 0;
+  T* val = const_cast<T*>(data<T>());
+  if (paddle::platform::is_xpu_place(this->place())) {
+    val = new T[this->numel()];
+    xpu_wait();
+    xpu_memcpy(val, data(), this->numel() * sizeof(T), XPU_DEVICE_TO_HOST);
+  }
+  for (int i = 0; i < this->numel(); i++) {
+    result += static_cast<double>(val[i]);
+  }
+  if (paddle::platform::is_xpu_place(this->place())) {
+    delete[] val;
+  }
+  // ToDo: only support float now
+  return result;
+}
+
+double DenseTensor::check_sum() const {
+  if (!this->initialized()) {
+    return 0;
+  }
+  if (this->dtype() == paddle::experimental::CppTypeToDataType<float>::Type()) {
+    return this->check_sum_impl<float>();
+  } else if (this->dtype() ==
+             paddle::experimental::CppTypeToDataType<bool>::Type()) {
+    return this->check_sum_impl<bool>();
+  } else if (this->dtype() ==
+             paddle::experimental::CppTypeToDataType<int32_t>::Type()) {
+    return this->check_sum_impl<int32_t>();
+  } else if (this->dtype() == paddle::experimental::CppTypeToDataType<
+                                  paddle::experimental::float16>::Type()) {
+    return this->check_sum_impl<paddle::experimental::float16>();
+  } else {
+    return 0;
+  }
+}
+
+template <typename T>
+double DenseTensor::check_mse_impl(const DenseTensor& b) const {
+  paddle::platform::DeviceContextPool& pool =
+      paddle::platform::DeviceContextPool::Instance();
+  double result = 0.0;
+  T* val = const_cast<T*>(data<T>());
+  T* val_cpu = const_cast<T*>(b.data<T>());
+  VLOG(10) << "dev1_place: " << this->place() << ", dev1_addr: " << data()
+           << ", dev1_numel: " << this->numel();
+
+  VLOG(10) << "dev2_place: " << b.place() << ", dev2_addr: " << b.data()
+           << ", dev2_numel: " << b.numel();
+  if (paddle::platform::is_xpu_place(this->place())) {
+    auto& dev_ctx = *pool.Get(this->place());
+    val = new T[this->numel()];
+    dev_ctx.Wait();
+    xpu_memcpy(val, data(), this->numel() * sizeof(T), XPU_DEVICE_TO_HOST);
+  }
+
+  if (paddle::platform::is_xpu_place(b.place())) {
+    auto& dev_ctx = *pool.Get(b.place());
+    val_cpu = new T[this->numel()];
+    dev_ctx.Wait();
+    xpu_memcpy(val_cpu, b.data(), b.numel() * sizeof(T), XPU_DEVICE_TO_HOST);
+  }
+
+  for (int i = 0; i < this->numel(); i++) {
+    // result += (val[i] / this->numel());
+    result +=
+        pow(static_cast<double>(val[i]) - static_cast<double>(val_cpu[i]), 2);
+  }
+  if (paddle::platform::is_xpu_place(this->place())) {
+    delete[] val;
+  }
+
+  if (paddle::platform::is_xpu_place(b.place())) {
+    delete[] val_cpu;
+  }
+  VLOG(10) << "Dense tensor check mse end.";
+  // VLOG(10) << "result = " << result;
+  return result / this->numel();
+}
+
+double DenseTensor::check_mse(const DenseTensor& b) const {
+  if (!this->initialized()) {
+    return 0;
+  }
+  if (this->dtype() == paddle::experimental::CppTypeToDataType<float>::Type()) {
+    return this->check_mse_impl<float>(b);
+  } else if (this->dtype() ==
+             paddle::experimental::CppTypeToDataType<bool>::Type()) {
+    return this->check_mse_impl<bool>(b);
+  } else if (this->dtype() ==
+             paddle::experimental::CppTypeToDataType<int32_t>::Type()) {
+    return this->check_mse_impl<int32_t>(b);
+  } else if (this->dtype() == paddle::experimental::CppTypeToDataType<
+                                  paddle::experimental::float16>::Type()) {
+    return this->check_mse_impl<paddle::experimental::float16>(b);
+  } else {
+    return -3;
+  }
 }
 
 }  // namespace phi

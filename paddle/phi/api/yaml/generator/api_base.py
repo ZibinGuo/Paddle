@@ -104,14 +104,14 @@ class BaseAPI:
                 self.attrs['attr_info'][name][0] + ' ' + name + default_value
             )
 
-        return ", ".join(declare_args)
+        return ", ".join(declare_args) + ', bool debug_or_not = false'
 
     def get_define_args(self, inplace_flag=False):
         define_args = self.get_input_tensor_args(inplace_flag)
         for name in self.attrs['names']:
             define_args.append(self.attrs['attr_info'][name][0] + ' ' + name)
 
-        return ", ".join(define_args)
+        return ", ".join(define_args) + ', bool debug_or_not'
 
     def parse_args(self, api_name, api_item_yaml):
         optional_vars = []
@@ -1191,6 +1191,8 @@ PADDLE_API {self.get_return_type(inplace_flag=True)} {api_func_name}({self.get_d
 {code_indent}  const auto& kernel = kernel_result.kernel;
 {code_indent}  VLOG(6) << "{kernel_name} kernel: " << kernel;
 {code_indent}  auto* dev_ctx = GetDeviceContextByBackend(kernel_result.has_fallback_cpu ? Backend::CPU : kernel_backend);
+{code_indent}  auto dev_place = kernel_result.has_fallback_cpu ? Backend::CPU : kernel_backend;
+{code_indent}  VLOG(10) << "dev_place: " << dev_place;
 {input_tensors}
 {output_create}
 {code_indent}  paddle::platform::RecordEvent *infer_shape_record_event = nullptr;
@@ -1207,13 +1209,26 @@ PADDLE_API {self.get_return_type(inplace_flag=True)} {api_func_name}({self.get_d
 {code_indent}  if(paddle::platform::RecordEvent::IsEnabled()){{
 {code_indent}    kernel_record_event = new paddle::platform::RecordEvent(\"{self.api} compute\", paddle::platform::TracerEventType::OperatorInner, 1);
 {code_indent}  }}
+{code_indent}  paddle::experimental::XPUPaddleOpTimeTik();
+{code_indent}  VLOG(10) << "strat kernel";
 {code_indent}    (*kernel_fn)({kernel_args}, {", ".join(outputs_args)});
+{code_indent}  VLOG(10) << "end kernel";
 {code_indent}  if(kernel_record_event != nullptr){{
 {code_indent}    delete kernel_record_event;
 {code_indent}  }}
 {code_indent}  if (kernel_result.has_fallback_cpu) {{
 {fallback_kernel_output_trans}
 {code_indent}  }}
+{code_indent}  paddle::experimental::XPUPaddleOpTimeTok("{kernel_name}", dev_ctx, dev_place, kernel_data_type);
+{code_indent}  auto debug_start_str = paddle::experimental::GetDebugStartStr();
+{code_indent}  if (debug_start_str == "") {{
+{code_indent}    debug_start_str += paddle::experimental::XPUDebugStartString("{kernel_name}", dev_place, kernel_data_type);
+{code_indent}  }} else {{
+{code_indent}    std::stringstream print_buffer;
+{code_indent}    print_buffer << dev_place << " ";
+{code_indent}    debug_start_str += print_buffer.str();
+{code_indent}  }}
+{code_indent}  paddle::experimental::SetDebugStartStr(debug_start_str);
 {code_indent}  {self.gene_return_code()}"""
 
     def get_condition_code(self, kernel_name):
