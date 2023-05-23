@@ -332,6 +332,10 @@ cc_library(
        phi_data_transform
        phi_profiler)
 cc_library(
+  debug_op
+  SRCS debug_op.cc
+  DEPS phi)
+cc_library(
   phi_function_api
   SRCS ${api_source_file}
   DEPS phi_tensor_raw
@@ -341,7 +345,8 @@ cc_library(
        phi_data_transform
        api_custom_impl
        api_tensor_utils
-       phi_profiler)
+       phi_profiler
+       debug_op)
 cc_library(
   phi_bw_function_api
   SRCS ${bw_api_source_file}
