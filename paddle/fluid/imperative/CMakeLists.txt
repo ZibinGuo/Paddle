@@ -47,8 +47,13 @@ endif()
 cc_library(
   layer
   SRCS layer.cc
-  DEPS prepared_operator math_function imperative_flag variable_helper
-       op_registry var_helper)
+  DEPS prepared_operator
+       math_function
+       imperative_flag
+       variable_helper
+       op_registry
+       var_helper
+       debug_op)
 add_subdirectory(jit)
 if(WITH_GPU)
   cc_library(
