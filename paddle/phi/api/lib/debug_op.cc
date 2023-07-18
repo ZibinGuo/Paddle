@@ -435,14 +435,14 @@ std::vector<double> CheckAccImpl(const phi::DenseTensor& a,
 
   VLOG(10) << "dev2_place: " << b.place() << ", dev2_addr: " << b.data()
            << ", dev2_numel: " << b.numel();
-  if (paddle::platform::is_xpu_place(a.place())) {
+  if (phi::TransToPhiBackend(a.place()) == Backend::XPU) {
     auto& dev_ctx = *pool.Get(a.place());
     val_dev1 = new T[a.numel()];
     dev_ctx.Wait();
     xpu_memcpy(val_dev1, a.data(), a.numel() * sizeof(T), XPU_DEVICE_TO_HOST);
   }
 
-  if (paddle::platform::is_xpu_place(b.place())) {
+  if (phi::TransToPhiBackend(b.place()) == Backend::XPU) {
     auto& dev_ctx = *pool.Get(b.place());
     val_dev2 = new T[b.numel()];
     dev_ctx.Wait();
@@ -457,11 +457,11 @@ std::vector<double> CheckAccImpl(const phi::DenseTensor& a,
   //       static_cast<double>(val_dev2[i]), 2);
   // }
   std::vector<double> result{Functor()(val_dev1, val_dev2, a.numel())...};
-  if (paddle::platform::is_xpu_place(a.place())) {
+  if (phi::TransToPhiBackend(a.place()) == Backend::XPU) {
     delete[] val_dev1;
   }
 
-  if (paddle::platform::is_xpu_place(b.place())) {
+  if (phi::TransToPhiBackend(b.place()) == Backend::XPU) {
     delete[] val_dev2;
   }
   VLOG(10) << "Dense tensor check mse end.";
