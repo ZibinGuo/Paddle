@@ -24,8 +24,8 @@
 #include "paddle/fluid/platform/device_context.h"
 #include "paddle/fluid/platform/enforce.h"
 #include "paddle/fluid/platform/profiler.h"
-#include "paddle/phi/core/flags.h"
 #include "paddle/phi/api/lib/debug_op.h"
+#include "paddle/phi/core/flags.h"
 #include "paddle/phi/kernels/funcs/math_function.h"
 #ifdef PADDLE_WITH_MKLDNN
 #include "paddle/fluid/platform/mkldnn_helper.h"
@@ -536,7 +536,6 @@ static void OpBaseRunImpl(const framework::OperatorBase& op,
               << paddle::experimental::OpId() << " "
               << prepared_op.kernel_key().dtype() << " "
               << prepared_op.kernel_key().backend() << " fluid op" << std::endl;
-  };
   }
   VLOG(4) << LayerDebugString(op.Type(), ins, outs);
 
