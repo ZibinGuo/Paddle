@@ -612,8 +612,9 @@ std::string XPUDebugStartString(const std::string& op_name,
                                 const DataType& kernel_data_type) {
   if (ContinueOrNot(op_name)) {
     std::stringstream print_buffer;
-    print_buffer << "op_name_debug " << phi::TransToFluidOpName(op_name) << " "
-                 << OpId() << " " << kernel_data_type << " ";
+    print_buffer << "op_name_debug " << phi::TransToFluidOpName(op_name)
+                 << " device_id " << phi::backends::xpu::GetXPUCurrentDeviceId()
+                 << " " << OpId() << " " << kernel_data_type << " ";
     //  << dev_place
     //  << " ";
     //  << kernel_data_type << " in: ";
