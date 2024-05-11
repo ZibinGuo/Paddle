@@ -45,6 +45,11 @@ class InternalThreadId {
   ThreadId id_;
 };
 
+// pid_t GetTid()
+// {
+//     return syscall(SYS_gettid);
+// }
+
 InternalThreadId::InternalThreadId() {
   // C++ std tid
   id_.std_tid = std::hash<std::thread::id>()(std::this_thread::get_id());

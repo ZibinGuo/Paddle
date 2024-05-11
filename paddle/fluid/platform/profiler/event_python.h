@@ -19,6 +19,7 @@ limitations under the License. */
 #include <unordered_map>
 
 #include "paddle/fluid/platform/device/gpu/gpu_info.h"
+// #include "paddle/fluid/platform/device/xpu/xpu_info.h"
 #include "paddle/fluid/platform/profiler/event_node.h"
 #include "paddle/fluid/platform/profiler/extra_info.h"
 
@@ -170,6 +171,10 @@ class ProfilerResult {
   std::map<uint32_t, gpuDeviceProp> GetDeviceProperty() {
     return device_property_map_;
   }
+// #elif defined(PADDLE_WITH_XPU) && defined(PADDLE_WITH_XPTI)
+//   std::map<uint32_t, XPUVersion> GetDeviceProperty() {
+//     return device_property_map_;
+//   }
 #endif
 
  private:
@@ -178,6 +183,8 @@ class ProfilerResult {
   ExtraInfo extra_info_;
 #if defined(PADDLE_WITH_CUDA) || defined(PADDLE_WITH_HIP)
   std::map<uint32_t, gpuDeviceProp> device_property_map_;
+// #elif defined(PADDLE_WITH_XPU) && defined(PADDLE_WITH_XPTI)
+//   std::map<uint32_t, XPUVersion> device_property_map
 #endif
   std::string version_;
   uint32_t span_indx_;

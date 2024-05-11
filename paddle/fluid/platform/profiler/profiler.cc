@@ -23,6 +23,8 @@
 #endif
 #if defined(PADDLE_WITH_CUDA) || defined(PADDLE_WITH_HIP)
 #include "paddle/fluid/platform/device/gpu/gpu_info.h"
+// #elif defined(PADDLE_WITH_XPU) && defined(PADDLE_WITH_XPTI)
+// #include "paddle/fluid/platform/device/xpu/xpu_info.h"
 #endif
 #include "paddle/fluid/platform/enforce.h"
 #include "paddle/fluid/platform/flags.h"
@@ -141,12 +143,14 @@ std::unique_ptr<ProfilerResult> Profiler::Stop() {
     tracer.Get().StopTracing();
     tracer.Get().CollectTraceData(&collector);
   }
+  VLOG(1) << "==StopTracing()==";
   std::unique_ptr<NodeTrees> tree(
       new NodeTrees(collector.HostEvents(),
                     collector.RuntimeEvents(),
                     collector.DeviceEvents(),
                     collector.MemEvents(),
                     collector.OperatorSupplementEvents()));
+  VLOG(1) << "==NodeTrees creaded==";
   cpu_utilization_.RecordEndTimeInfo();
   ExtraInfo extrainfo;
   extrainfo.AddExtraInfo(std::string("System Cpu Utilization"),
@@ -162,6 +166,7 @@ std::unique_ptr<ProfilerResult> Profiler::Stop() {
                            std::string("%s"),
                            kv.second.c_str());
   }
+// 获取设备信息
 #if defined(PADDLE_WITH_CUDA) || defined(PADDLE_WITH_HIP)
   std::map<uint32_t, gpuDeviceProp> device_property_map;
   std::vector<int32_t> device_ids = GetSelectedDevices();
@@ -171,7 +176,18 @@ std::unique_ptr<ProfilerResult> Profiler::Stop() {
   }
   ProfilerResult* profiler_result_ptr = new platform::ProfilerResult(
       std::move(tree), extrainfo, device_property_map);
+// #elif defined(PADDLE_WITH_XPU) && defined(PADDLE_WITH_XPTI)
+// std::map<uint32_t, XPUVersion> device_property_map;
+// std::vector<int32_t> device_ids = GetXPUSelectedDevices();
+// for (auto device_id : device_ids) {
+//   const XPUVersion device_property = get_xpu_version(device_id);
+//   device_property_map[device_id] = device_property;
+// }
+// VLOG(1) << "ProfilerResult build tree";
+// ProfilerResult* profiler_result_ptr = new platform::ProfilerResult(
+//     std::move(tree), extrainfo);
 #else
+  VLOG(1) << "ProfilerResult build tree";
   ProfilerResult* profiler_result_ptr =
       new platform::ProfilerResult(std::move(tree), extrainfo);
 #endif

@@ -98,6 +98,21 @@ void LayerNormKernel(const Context& ctx,
                           variance_data);
   PADDLE_ENFORCE_XDNN_SUCCESS(r, "layer_norm");
 }
+
+template <typename T,
+          typename Context,
+          typename std::enable_if<std::is_same<T, bfloat16>::value, void>::type*
+              ptr = nullptr>
+void LayerNormKernel(const Context& ctx,
+                     const DenseTensor& x,
+                     const paddle::optional<DenseTensor>& scale,
+                     const paddle::optional<DenseTensor>& bias,
+                     float epsilon,
+                     int begin_norm_axis,
+                     DenseTensor* out,
+                     DenseTensor* mean,
+                     DenseTensor* variance) {}
+
 }  // namespace phi
 
 PD_REGISTER_KERNEL(layer_norm,

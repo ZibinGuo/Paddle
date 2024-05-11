@@ -37,6 +37,8 @@ inline uint64_t PosixInNsec() {
 #endif
 }
 
+pid_t GetTid();
+
 // All kinds of Ids for OS thread
 struct ThreadId {
   uint64_t std_tid = 0;    // std::hash<std::thread::id>

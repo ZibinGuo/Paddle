@@ -94,6 +94,7 @@ class Profiler {
   static std::atomic<bool> alive_;
   ProfilerOptions options_;
   uint64_t start_ns_ = UINT64_MAX;
+  // Profiler有好几个tracer
   std::list<TracerHolder> tracers_;
   CpuUtilization cpu_utilization_;
 };

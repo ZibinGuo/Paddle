@@ -38,5 +38,7 @@ using phi::SetCurrentThreadName;
 
 using phi::GetProcessId;
 
+// using phi::GetProcessId;
+
 }  // namespace platform
 }  // namespace paddle

@@ -32,7 +32,9 @@ limitations under the License. */
 #ifdef PADDLE_WITH_CUDA
 #include "paddle/phi/backends/dynload/nvtx.h"
 #endif
-
+// #if defined(PADDLE_WITH_XPU) && defined(PADDLE_WITH_XPTI)
+// #include "paddle/phi/backends/dynload/xpti.h"
+// #endif
 PHI_DEFINE_bool(enable_host_event_recorder_hook,
                 false,
                 "enable HostEventRecorder, hook Profiler");
@@ -224,7 +226,17 @@ void RecordEvent::End() {
   }
 #endif
 #endif
+  /*
+  VLOG(1) << "FLAGS_enable_host_event_recorder_hook :" <<
+  FLAGS_enable_host_event_recorder_hook; if (LIKELY(shallow_copy_name_ !=
+  nullptr)) { VLOG(1) << "name: " << shallow_copy_name_; } else if (name_ !=
+  nullptr) { VLOG(1) << "name: " << name_; } else { VLOG(1) << "name: " <<
+  "None";
+  }
+  */
   if (LIKELY(FLAGS_enable_host_event_recorder_hook && is_enabled_)) {
+    // VLOG(1) << "HERE OR NOT 1";
+    // 进到这里了
     uint64_t end_ns = PosixInNsec();
     if (LIKELY(shallow_copy_name_ != nullptr)) {
       HostEventRecorder<CommonEvent>::GetInstance().RecordEvent(
@@ -244,11 +256,12 @@ void RecordEvent::End() {
     is_enabled_ = false;
     return;
   }
-
+  // VLOG(1) << "HERE OR NOT 2";
   if (ProfilerHelper::g_state == ProfilerState::kDisabled || !is_enabled_)
     return;
   // lock is not needed, the code below is thread-safe
   DeviceTracer *tracer = GetDeviceTracer();
+  // VLOG(1) << "HERE OR NOT 3";
   if (tracer) {
     uint64_t end_ns = PosixInNsec();
     tracer->AddCPURecords(CurAnnotationName(),
@@ -286,7 +299,12 @@ RecordOpInfoSupplement::RecordOpInfoSupplement(
       PosixInNsec(), type, input_shapes, attrs, op_id);
 }
 
-bool RecordOpInfoSupplement::IsEnabled() { return FLAGS_enable_record_op_info; }
+bool RecordOpInfoSupplement::IsEnabled() {
+  // 没进来
+  // VLOG(1) << "RecordOpInfoSupplement::IsEnabled() ? " <<
+  // FLAGS_enable_record_op_info;
+  return FLAGS_enable_record_op_info;
+}
 
 void EnableOpInfoRecorder() { FLAGS_enable_record_op_info = true; }
 

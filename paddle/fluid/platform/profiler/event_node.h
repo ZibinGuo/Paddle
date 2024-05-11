@@ -143,6 +143,7 @@ class DeviceTraceEventNode {
   DeviceTraceEvent device_event_;
 };
 
+// 设备无关， XPU可以复用
 class CudaRuntimeTraceEventNode {
  public:
   // constructor

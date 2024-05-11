@@ -54,6 +54,7 @@ void NodeTrees::BuildTrees(
     const std::vector<MemTraceEventNode*>& mem_event_nodes,
     const std::vector<OperatorSupplementEventNode*>& op_supplement_events) {
   // separate Host Event Nodes into different threads
+  // 把host even nodes分成不同的线程
   std::map<uint64_t, std::vector<HostTraceEventNode*>>
       thread2host_event_nodes;  // used to store HostTraceEventNodes per thread
   std::map<uint64_t, std::vector<CudaRuntimeTraceEventNode*>>
@@ -72,8 +73,11 @@ void NodeTrees::BuildTrees(
   std::map<uint32_t, CudaRuntimeTraceEventNode*>
       correlation_id2runtime_event_node;  // used to store the relation between
                                           // correlation id and runtime node
+                                          // 关联correlation id 和
+                                          // runtime_event_node
   // construct thread2host_event_nodes
   for (auto host_event_node : host_event_nodes) {
+    // 一个线程对应多个event_nodes，所以用vector存储
     thread2host_event_nodes[host_event_node->ThreadId()].push_back(
         host_event_node);
   }
@@ -85,8 +89,9 @@ void NodeTrees::BuildTrees(
     correlation_id2runtime_event_node[runtime_event_node->CorrelationId()] =
         runtime_event_node;
   }
-  // associate CudaRuntimeTraceEventNode and DeviceTraceEventNode
-  // construct correlation_id2device_event_nodes
+  // 这里把correlation_id一样的device_event_node
+  // 放在了runtime_event_node里面(关联起来) associate CudaRuntimeTraceEventNode
+  // and DeviceTraceEventNode construct correlation_id2device_event_nodes
   for (auto device_event_node : device_event_nodes) {
     auto dst_iter = correlation_id2runtime_event_node.find(
         device_event_node->CorrelationId());
@@ -164,6 +169,7 @@ void NodeTrees::BuildTrees(
   }
 
   // construct trees
+  // 线程去重
   std::set<uint64_t> thread_set;
   for (auto& event_node : thread2host_event_nodes) {
     thread_set.insert(event_node.first);
@@ -178,6 +184,8 @@ void NodeTrees::BuildTrees(
     thread_set.insert(event_node.first);
   }
 
+  // 开始关联各种node，按照线程分， 一个线程一个trees_map,
+  // 这里没有用到device_event_nodes，是因为放在了runtime_event_nodes里面
   for (auto item : thread_set) {
     thread_event_trees_map_[item] =
         BuildTreeRelationship(thread2host_event_nodes[item],
@@ -186,7 +194,34 @@ void NodeTrees::BuildTrees(
                               thread2op_supplement_event_nodes[item]);
   }
 }
+/*
+这段代码定义了一个名为 BuildTreeRelationship
+的函数，它的目的是构建一个事件节点树，
+用于分析和表示不同类型的跟踪事件之间的关系。这些事件来自于主机事件（HostTraceEventNode）、
+CUDA运行时事件（CudaRuntimeTraceEventNode）和内存事件（MemTraceEventNode），
+以及操作补充事件（OperatorSupplementEventNode）。
+这种结构通常用于性能分析工具中，以帮助理解程序在执行期间的行为，特别是在并发或分布式环境中。
 
+函数的主要步骤如下：
+
+初始化栈和根节点：使用一个栈（node_stack）来维护事件节点的层级关系，
+并创建一个代表顶级的根节点（root_node），然后将这个根节点推入栈中。
+
+处理主机事件节点：遍历提供的主机事件节点列表（host_event_nodes），对于每个节点，
+函数检查它是否应该作为当前栈顶节点的子节点。这是通过比较时间戳来确定的。
+如果当前事件的开始时间早于栈顶节点的结束时间，那么它就被认为是栈顶节点的子节点，
+并将其添加到栈顶节点的子节点列表中，然后将当前节点推入栈中。
+
+插入CUDA运行时事件节点：在处理每个主机事件节点的同时，
+函数还会查找并插入时间范围在当前栈顶节点内的CUDA运行时事件节点。
+这是通过遍历runtime_event_nodes列表并比较时间戳来完成的。
+满足条件的CUDA运行时事件节点被添加为当前栈顶节点的子节点，并从列表中移除，以避免重复处理。
+
+处理剩余的CUDA运行时节点：在处理完所有主机事件节点后，如果栈中还有剩余的节点，
+函数会继续查找并插入剩余的CUDA运行时事件节点到合适的位置。
+
+返回根节点：构建完成后，函数返回根节点，此时根节点代表了完整的事件节点树，可以用于进一步的分析或可视化。
+*/
 HostTraceEventNode* NodeTrees::BuildTreeRelationship(
     std::vector<HostTraceEventNode*> host_event_nodes,
     std::vector<CudaRuntimeTraceEventNode*> runtime_event_nodes,

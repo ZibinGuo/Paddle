@@ -83,7 +83,9 @@ struct CSoftmaxWithCrossEntropyProcessGroupFunctor<phi::XPUContext, T> {
     const auto& logits_dims = logits->dims();
 
     const int axis = logits_dims.size() - 1;
+    // logits_dims除最后一维全部相乘
     const int N = phi::funcs::SizeToAxis(axis, logits_dims);
+    // logits_dims的最后一维
     const int D = phi::funcs::SizeFromAxis(axis, logits_dims);
 
     phi::DenseTensor logits_2d, softmax_2d;
@@ -97,6 +99,7 @@ struct CSoftmaxWithCrossEntropyProcessGroupFunctor<phi::XPUContext, T> {
     int ret = -1;
     // step 1, obtain logit_max
     phi::DenseTensor logits_max;
+    // 每个N中选一个最大值
     logits_max = ctx.AllocateTmpTensor<T, phi::XPUContext>({N, 1}, dev_ctx);
     {
       // reduce last dim

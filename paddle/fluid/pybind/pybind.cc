@@ -2645,6 +2645,8 @@ All parameter, weight, gradient are variables in Paddle.
           "stop",
           [](paddle::platform::Profiler *profiler) {
             platform::DisableHostEventRecorder();
+            // 这里调用Profiler::Stop()
+            // 产生一个result
             auto result = profiler->Stop();
             framework::StaticGraphExecutorPerfStatistics(
                 result->GetNodeTrees());

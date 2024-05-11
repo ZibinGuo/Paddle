@@ -38,6 +38,21 @@
 namespace paddle {
 namespace platform {
 
+namespace details {
+std::unordered_map<uint32_t, uint64_t> XPUCreateThreadIdMapping() {
+  std::unordered_map<uint32_t, uint64_t> mapping;
+  std::unordered_map<uint64_t, ThreadId> ids = GetAllThreadIds();
+  for (const auto& id : ids) {
+    // mapping[id.second.cupti_tid] = id.second.sys_tid;
+    mapping[id.second.sys_tid] = id.second.sys_tid;
+    std::cout << "cupti_tid: " << id.second.cupti_tid << std::endl;
+    std::cout << "sys_tid: " << id.second.sys_tid << std::endl;
+    std::cout << "std_tid: " << id.second.std_tid << std::endl;
+  }
+  return mapping;
+}
+}  // namespace details
+
 void XPUTracer::PrepareTracing() {
   PADDLE_ENFORCE_EQ(
       state_ == TracerState::UNINITED || state_ == TracerState::STOPED,
@@ -78,6 +93,7 @@ void XPUTracer::StopTracing() {
 #ifdef PADDLE_WITH_XPTI
 void AddApiRecord(const baidu::xpu::xpti::XPTIEventApi* api,
                   uint64_t start_ns,
+                  const std::unordered_map<uint32_t, uint64_t> tid_mapping,
                   TraceEventCollector* collector) {
   if (api->start < start_ns) {
     VLOG(4) << "xpu event " << api->get_name() << " start " << api->start
@@ -88,8 +104,22 @@ void AddApiRecord(const baidu::xpu::xpti::XPTIEventApi* api,
   event.name = api->get_name();
   event.start_ns = api->start;
   event.end_ns = api->end;
-  event.process_id = api->pid;
-  event.thread_id = api->tid;
+  // event.process_id = api->pid;
+  event.process_id = GetProcessId();
+  // uint64_t tid = 0;
+  // uint64_t tid = event.process_id;
+  // uint64_t tid = GetCurrentThreadSysId();
+  uint64_t tid = api->tid;
+  // auto iter = tid_mapping.find(api->tid);
+  // auto iter = tid_mapping.find(tid);
+  // if (iter == tid_mapping.end()) {
+  //   tid = GetCurrentThreadSysId();
+  // } else {
+  //   // tid = iter->second;
+  // }
+  // event.thread_id = api->tid;
+  event.thread_id = tid;
+  // event.thread_id = GetTid();
   event.correlation_id = api->args.token;
 
   collector->AddRuntimeEvent(std::move(event));
@@ -163,6 +193,7 @@ void XPUTracer::CollectTraceData(TraceEventCollector* collector) {
       platform::errors::PreconditionNotMet("Tracer must be STOPED"));
 #ifdef PADDLE_WITH_XPTI
   XPTI_CALL(dynload::xptiActivityFlushAll());
+  auto mapping = details::XPUCreateThreadIdMapping();
   baidu::xpu::xpti::XPTIEvent* record = nullptr;
   while (true) {
     XPTIResult status = dynload::xptiActivityGetNextRecord(&record);
@@ -173,6 +204,7 @@ void XPUTracer::CollectTraceData(TraceEventCollector* collector) {
           AddApiRecord(
               reinterpret_cast<const baidu::xpu::xpti::XPTIEventApi*>(record),
               tracing_start_ns_,
+              mapping,
               collector);
           break;
         case XPTI_EVENT_TYPE_KERNEL:

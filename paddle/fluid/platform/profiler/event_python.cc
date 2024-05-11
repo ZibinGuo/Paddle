@@ -145,6 +145,21 @@ ProfilerResult::ProfilerResult(
     }
   }
 }
+/*
+#elif defined(PADDLE_WITH_XPU) && defined(PADDLE_WITH_XPTI)
+ProfilerResult::ProfilerResult(
+    std::unique_ptr<NodeTrees> tree,
+    const ExtraInfo& extra_info)
+    : tree_(tree.release()),
+      extra_info_(extra_info) {
+  if (tree_ != nullptr) {
+    std::map<uint64_t, HostTraceEventNode*> nodetrees = tree_->GetNodeTrees();
+    for (auto& nodetree : nodetrees) {
+      thread_event_trees_map_[nodetree.first] = CopyTree(nodetree.second);
+    }
+  }
+}
+*/
 #endif
 
 ProfilerResult::ProfilerResult(std::unique_ptr<NodeTrees> tree,

@@ -36,6 +36,7 @@ enum class ProfilerState {
   kDisabled,  // disabled state
   kCPU,       // CPU profiling state
   kCUDA,      // GPU profiling state
+  kXPU,       // XPU profiling state
   kAll,       // Profile both CPU and GPU. (Currently experimental).
 };
 
