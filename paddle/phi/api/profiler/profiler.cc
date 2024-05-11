@@ -161,6 +161,7 @@ RecordEvent::RecordEvent(const std::string &name,
   name_ = new std::string(name);
   role_ = role;
   type_ = type;
+  // 开始计时
   start_ns_ = PosixInNsec();
 }
 
