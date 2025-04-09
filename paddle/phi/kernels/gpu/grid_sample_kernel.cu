@@ -81,8 +81,10 @@ __global__ void GridSampleCudaKernel(const int nthreads,
                                      const Mode mode,
                                      const PaddingMode padding_mode,
                                      bool align_corners) {
+  // 一个n所有的像素
   int inp_sN = out_c * in_h * in_w;
 
+  // 一个c所有的像素
   int inp_sC = in_h * in_w;
   int inp_sH = in_w;
   int inp_sW = 1;
@@ -95,6 +97,7 @@ __global__ void GridSampleCudaKernel(const int nthreads,
   int out_sH = out_w;
   int out_sW = 1;
   CUDA_KERNEL_LOOP(index, nthreads) {
+    // 计算出tid在输出的一个c中的位置坐标
     const int w = index % out_w;
     const int h = (index / out_w) % out_h;
     const int n = index / (out_h * out_w);
@@ -349,9 +352,12 @@ void GridSampleKernel(const Context& dev_ctx,
   }
 
   if (x.dims().size() == 4) {
+    // grid shape: [N, H, W, 2]
+    // output shape: [N, C, H_out, W_out]
     const int n = grid.dims()[0];
     const int out_h = grid.dims()[1];
     const int out_w = grid.dims()[2];
+    // x shape: [N, C, H, W]
     const int c = x.dims()[1];
     const int in_h = x.dims()[2];
     const int in_w = x.dims()[3];
@@ -362,6 +368,7 @@ void GridSampleKernel(const Context& dev_ctx,
     VLOG(3) << "out dims: " << out->dims()[0] << "; " << out->dims()[1] << "; "
             << out->dims()[2] << "; " << out->dims()[3];
 
+    // 输出中一个c的所有像素点作为线程总数，每个线程负责输出中一个c中的一个像素点的计算
     int count = static_cast<int>(n * out_h * out_w);
     auto cu_stream = dev_ctx.stream();
     backends::gpu::GpuLaunchConfig config =

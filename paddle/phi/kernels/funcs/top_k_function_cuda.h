@@ -1018,17 +1018,34 @@ __global__ void AssignGradWithAxis(const T* grad_out,
                                    int post,
                                    int raw_height,
                                    int k) {
+  // grad_out = [pre, k, post]
+  // indices = [pre, k, post]
+  // grad_in = [pre, raw_height, post]
+  // indices的dimension与grad_out相同为 [pre, k, post]
   // raw_height is the length of topk axis
+  // 一个block负责一个pre
   for (int i = blockIdx.x; i < pre; i += gridDim.x) {
+    // 第i个pre在输出（grad_out 和 indices）的起始位置
     int base_index = i * post * k;
+    // 第i个pre在输入的起始位置
     int base_grad = i * post * raw_height;
+    // 将第i个pre都填0
     for (int j = threadIdx.x; j < raw_height * post; j += blockDim.x) {
       grad_in[base_grad + j] = static_cast<T>(0);
     }
     __syncthreads();
+    // 开时将第i个pre的topk的梯度值赋值到grad_in
+    // 由于indices的dimension与grad_out相同为 [pre, k, post]，
+    // 所以在grad_out中的每一个值都有1个indices与之对应，
+    // 指示grad_out中的值在grad_in中raw_height轴的位置
+    // 换算关系为in_ij = i * post * raw_height
+    // + indices[i * post * k + j] * post + (j % post)
     for (int j = threadIdx.x; j < k * post; j += blockDim.x) {
+      // 因为grad_int的维度为[pre, raw_height, post]，idx_ij是raw_height中的坐标
       int64_t idx_ij = indices[base_index + j];
+      // 将indices中的值换算成grad_in中的位置
       int64_t in_ij = base_grad + (idx_ij * post) + (j % post);
+      // 将grad_out中的值赋值到grad_in中
       grad_in[in_ij] = grad_out[base_index + j];
     }
   }

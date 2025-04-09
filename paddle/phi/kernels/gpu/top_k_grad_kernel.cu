@@ -71,6 +71,7 @@ void TopkGradKernel(const Context& dev_ctx,
   int block_size = ComputeBlockSize(post * k);
   int max_threads = dev_ctx.GetMaxPhysicalThreadCount();
   const int max_blocks = std::max(((max_threads - 1) / block_size + 1), 1);
+  // 一个block处理一个pre
   int grid_size = std::min(max_blocks, pre);
 
   // lanuch the cuda kernel to assign the grad

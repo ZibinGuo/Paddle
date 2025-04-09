@@ -130,6 +130,15 @@ ComputePositionsWithMask(T coord,
   return SafeDownGradeToIntRange(coord);
 }
 
+// 输入: input: [N, C, H, W]
+// 输出: grad_input: [N, C, H, W]
+
+// 输入: grid: [N, H_out, W_out, 2]
+// grid会指明是哪四个输入的点插出来的该输出的值
+// 输出: grad_grid: [N, H_out, W_out, 2]
+
+// output: [N, C, H_out, W_out]  (反向和output无关)
+// 输入: grad_output: [N, C, H_out, W_out]
 template <typename T>
 __global__ void GridSamplerCudaBackwardKernel(const int nthreads,
                                               const T* grad_output,
@@ -146,24 +155,38 @@ __global__ void GridSamplerCudaBackwardKernel(const int nthreads,
                                               const Mode mode,
                                               const PaddingMode padding_mode,
                                               bool align_corners) {
+  // 输入一个n的偏移量
   int inp_sN = out_c * in_h * in_w;
+  // 输入一个c的偏移量
   int inp_sC = in_h * in_w;
+  // 输入一个h的偏移量
   int inp_sH = in_w;
+  // 输入一个w的偏移量
   int inp_sW = 1;
+  // grid一个n的偏移量(grid和c无关)
   int grid_sN = out_h * out_w * 2;
+  // grid一个h的偏移量
   int grid_sH = out_w * 2;
+  // grid一个w的偏移量
   int grid_sW = 2;
   int grid_sCoor = 1;
 
+  // grad_output一个n的偏移量
   int gOut_sN = out_c * out_h * out_w;
+  // grad_output一个C的偏移量
   int gOut_sC = out_h * out_w;
+  // grad_output一个h的偏移量
   int gOut_sH = out_w;
+  // grad_output一个w的偏移量
   int gOut_sW = 1;
 
+  // 一维分块
   CUDA_KERNEL_LOOP(index, nthreads) {
+    // 一个线程负责输出中坐标为(n, h, w)的所有c的梯度的计算
     const int w = index % out_w;
     const int h = (index / out_w) % out_h;
     const int n = index / (out_h * out_w);
+    // 计算对应的grid的偏移量
     const int grid_offset = n * grid_sN + h * grid_sH + w * grid_sW;
 
     T ix = grid[grid_offset];
@@ -176,6 +199,7 @@ __global__ void GridSamplerCudaBackwardKernel(const int nthreads,
         iy, in_h, padding_mode, align_corners, &giy_mult);
 
     if (mode == Mode::bilinear) {
+      // 通过输出的坐标计算输入的四个坐标
       int ix_nw = static_cast<int>(floor(ix));
       int iy_nw = static_cast<int>(floor(iy));
       int ix_ne = ix_nw + 1;
@@ -209,6 +233,7 @@ __global__ void GridSamplerCudaBackwardKernel(const int nthreads,
         AtomicAdd(
             gInp_ptr_NC, iy_se, ix_se, inp_sH, inp_sW, in_h, in_w, se * gOut);
 
+        // 计算grid的梯度
         if (InBounds(iy_nw, ix_nw, in_h, in_w)) {
           T nw_val = input[inp_offset_NC + iy_nw * inp_sH + ix_nw * inp_sW];
           gix -= nw_val * (iy_se - iy) * gOut;
@@ -572,6 +597,7 @@ void GridSampleGradKernel(const Context& dev_ctx,
                           bool align_corners,
                           DenseTensor* x_grad,
                           DenseTensor* grid_grad) {
+  // 设置padding模式
   PaddingMode enum_padding_mode;
   Mode enum_mode;
   if (padding_mode == "border") {
@@ -582,13 +608,16 @@ void GridSampleGradKernel(const Context& dev_ctx,
     enum_padding_mode = PaddingMode::zeros;
   }
 
+  // 设置采样模式
   if (mode == "nearest") {
     enum_mode = Mode::nearest;
   } else {
     enum_mode = Mode::bilinear;
   }
 
+  // 当x为4维度时
   if (x.dims().size() == 4) {
+    // 输入的n和c是一样的, 不一样的是h和w
     const int n = grid.dims()[0];
     const int out_h = grid.dims()[1];
     const int out_w = grid.dims()[2];
@@ -597,8 +626,10 @@ void GridSampleGradKernel(const Context& dev_ctx,
     const int in_w = x.dims()[3];
 
     dev_ctx.template Alloc<T>(x_grad);
+    // 将输出置零
     phi::funcs::SetConstant<Context, T>()(dev_ctx, x_grad, static_cast<T>(0));
 
+    // 输出的h和w的值是通过grid的值计算出来的
     T* grid_grad_data = nullptr;
     if (grid_grad != nullptr) {
       grid_grad_data = dev_ctx.template Alloc<T>(grid_grad);
@@ -606,6 +637,7 @@ void GridSampleGradKernel(const Context& dev_ctx,
 
     int count = static_cast<int>(n * out_h * out_w);
     auto cu_stream = dev_ctx.stream();
+    // 计算最合适的线程数和block数
     backends::gpu::GpuLaunchConfig config =
         backends::gpu::GetGpuLaunchConfig1D(dev_ctx, count);
     GridSamplerCudaBackwardKernel<T>
