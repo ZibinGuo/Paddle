@@ -33,7 +33,12 @@ XPUOpMap& get_kl3_ops() {
       {"abs",
        XPUKernelSet({phi::DataType::FLOAT32,
                      phi::DataType::FLOAT16,
-                     phi::DataType::BFLOAT16})},
+                     phi::DataType::BFLOAT16
+#ifdef PADDLE_WITH_XPU_FFT
+                     ,
+                     phi::DataType::COMPLEX64
+#endif
+       })},
       {"abs_grad",
        XPUKernelSet({phi::DataType::FLOAT32, phi::DataType::FLOAT16})},
       {"accuracy",
@@ -757,6 +762,10 @@ XPUOpMap& get_kl3_ops() {
       {"unfold_grad",
        XPUKernelSet({phi::DataType::FLOAT32, phi::DataType::FLOAT16})},
       {"floor", XPUKernelSet({phi::DataType::FLOAT32})},
+      {"frame",
+       XPUKernelSet({phi::DataType::INT32, phi::DataType::INT64, phi::DataType::FLOAT32, phi::DataType::FLOAT64, phi::DataType::FLOAT16, phi::DataType::BFLOAT16})},
+      {"frame_grad",
+       XPUKernelSet({phi::DataType::INT32, phi::DataType::INT64, phi::DataType::FLOAT32, phi::DataType::FLOAT64, phi::DataType::FLOAT16, phi::DataType::BFLOAT16})},
       {"ceil",
        XPUKernelSet({phi::DataType::FLOAT32,
                      phi::DataType::FLOAT16,
@@ -1894,6 +1903,11 @@ XPUOpMap& get_kl3_ops() {
       {"cos_grad", XPUKernelSet({phi::DataType::FLOAT32})},
       {"linspace",
        XPUKernelSet({phi::DataType::FLOAT32,
+                     phi::DataType::FLOAT16,
+                     phi::DataType::BFLOAT16,
+                     phi::DataType::INT8,
+                     phi::DataType::UINT8,
+                     phi::DataType::INT16,
                      phi::DataType::INT32,
                      phi::DataType::INT64})},
       {"randint", XPUKernelSet({phi::DataType::INT32, phi::DataType::INT64})},
