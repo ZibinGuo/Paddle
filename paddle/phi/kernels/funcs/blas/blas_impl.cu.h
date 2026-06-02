@@ -45,23 +45,17 @@ struct CUBlas<float> {
 
   template <typename... ARGS>
   static void AXPY(ARGS... args) {
-    // PADDLE_ENFORCE_GPU_SUCCESS(cublasSaxpy(args...));
-    PADDLE_THROW(common::errors::Unimplemented(
-        "cublasSaxpy is not implemented for xcuda"));
+    PADDLE_ENFORCE_GPU_SUCCESS(phi::dynload::cublasSaxpy(args...));
   }
 
   template <typename... ARGS>
   static void SCAL(ARGS... args) {
-    // PADDLE_ENFORCE_GPU_SUCCESS(cublasSscal(args...));
-    PADDLE_THROW(common::errors::Unimplemented(
-        "cublasSscal is not implemented for xcuda"));
+    PADDLE_ENFORCE_GPU_SUCCESS(phi::dynload::cublasSscal(args...));
   }
 
   template <typename... ARGS>
   static void VCOPY(ARGS... args) {
-    // PADDLE_ENFORCE_GPU_SUCCESS(cublasScopy(args...));
-    PADDLE_THROW(common::errors::Unimplemented(
-        "cublasScopy is not implemented for xcuda"));
+    PADDLE_ENFORCE_GPU_SUCCESS(phi::dynload::cublasScopy(args...));
   }
 
   template <typename... ARGS>
@@ -117,23 +111,27 @@ struct CUBlas<float> {
     VLOG(5) << "use_tensor_op_math: "
             << (dev_ctx->tensor_core_available() ? "True" : "False");
     dev_ctx->TensorCoreCublasCallIfAvailable([&](cublasHandle_t handle) {
-      PADDLE_ENFORCE_GPU_SUCCESS(phi::dynload::cublasSgemmEx(handle,
-                                                             transa,
-                                                             transb,
-                                                             m,
-                                                             n,
-                                                             k,
-                                                             alpha,
-                                                             A,
-                                                             Atype,
-                                                             lda,
-                                                             B,
-                                                             Btype,
-                                                             ldb,
-                                                             beta,
-                                                             C,
-                                                             Ctype,
-                                                             ldc));
+      // xtrans cublasSgemmEx fails API verification, so the original call
+      // remains disabled instead of using the removed dynload API.
+      // PADDLE_ENFORCE_GPU_SUCCESS(phi::dynload::cublasSgemmEx(handle,
+      //                                                        transa,
+      //                                                        transb,
+      //                                                        m,
+      //                                                        n,
+      //                                                        k,
+      //                                                        alpha,
+      //                                                        A,
+      //                                                        Atype,
+      //                                                        lda,
+      //                                                        B,
+      //                                                        Btype,
+      //                                                        ldb,
+      //                                                        beta,
+      //                                                        C,
+      //                                                        Ctype,
+      //                                                        ldc));
+      PADDLE_THROW(common::errors::Unimplemented(
+          "cublasSgemmEx is not supported by xtrans."));
     });
 #else
     PADDLE_THROW(common::errors::Unimplemented(
@@ -165,23 +163,27 @@ struct CUBlas<float> {
     VLOG(5) << "use_tensor_op_math: "
             << (dev_ctx->tensor_core_available() ? "True" : "False");
     dev_ctx->TensorCoreCublasCallIfAvailable([&](cublasHandle_t handle) {
-      PADDLE_ENFORCE_GPU_SUCCESS(phi::dynload::cublasSgemmEx_64(handle,
-                                                                transa,
-                                                                transb,
-                                                                m,
-                                                                n,
-                                                                k,
-                                                                alpha,
-                                                                A,
-                                                                Atype,
-                                                                lda,
-                                                                B,
-                                                                Btype,
-                                                                ldb,
-                                                                beta,
-                                                                C,
-                                                                Ctype,
-                                                                ldc));
+      // xtrans cublasSgemmEx_64 is a success-only empty stub, so the original
+      // call remains disabled instead of using the removed dynload API.
+      // PADDLE_ENFORCE_GPU_SUCCESS(phi::dynload::cublasSgemmEx_64(handle,
+      //                                                           transa,
+      //                                                           transb,
+      //                                                           m,
+      //                                                           n,
+      //                                                           k,
+      //                                                           alpha,
+      //                                                           A,
+      //                                                           Atype,
+      //                                                           lda,
+      //                                                           B,
+      //                                                           Btype,
+      //                                                           ldb,
+      //                                                           beta,
+      //                                                           C,
+      //                                                           Ctype,
+      //                                                           ldc));
+      PADDLE_THROW(common::errors::Unimplemented(
+          "cublasSgemmEx_64 is not supported by xtrans."));
     });
 #else
     PADDLE_THROW(common::errors::Unimplemented(
@@ -202,14 +204,13 @@ struct CUBlas<float> {
 
   template <typename... ARGS>
   static void GETRI_BATCH(ARGS... args) {
-   PADDLE_THROW(phi::errors::Unimplemented("GETRI_BATCH is not supported by xtrans. upgrade"));
-    // PADDLE_ENFORCE_GPU_SUCCESS(phi::dynload::cublasSgetriBatched(args...));
+    PADDLE_ENFORCE_GPU_SUCCESS(phi::dynload::cublasSgetriBatched(args...));
   }
 
   template <typename... ARGS>
   static void MATINV_BATCH(ARGS... args) {
-    PADDLE_THROW(phi::errors::Unimplemented("SmatinvBatched is not supported by xtrans."));
-	  // PADDLE_ENFORCE_GPU_SUCCESS(phi::dynload::cublasSmatinvBatched(args...));
+    PADDLE_THROW(phi::errors::Unimplemented(
+        "SmatinvBatched is not supported by xtrans."));
   }
 
   template <typename... ARGS>
@@ -219,8 +220,7 @@ struct CUBlas<float> {
 
   template <typename... ARGS>
   static void TRSM_BATCH(ARGS... args) {
-    PADDLE_THROW(phi::errors::Unimplemented("StrsmBatched is not supported by xtrans."));
-    // PADDLE_ENFORCE_GPU_SUCCESS(phi::dynload::cublasStrsmBatched(args...));
+    PADDLE_ENFORCE_GPU_SUCCESS(phi::dynload::cublasStrsmBatched(args...));
   }
 
   template <typename... ARGS>
@@ -238,23 +238,17 @@ struct CUBlas<double> {
 
   template <typename... ARGS>
   static void AXPY(ARGS... args) {
-    // PADDLE_ENFORCE_GPU_SUCCESS(cublasDaxpy(args...));
-    PADDLE_THROW(common::errors::Unimplemented(
-        "cublasDaxpy is not implemented for xcuda"));
+    PADDLE_ENFORCE_GPU_SUCCESS(phi::dynload::cublasDaxpy(args...));
   }
 
   template <typename... ARGS>
   static void SCAL(ARGS... args) {
-    // PADDLE_ENFORCE_GPU_SUCCESS(cublasDscal(args...));
-    PADDLE_THROW(common::errors::Unimplemented(
-        "cublasDscal is not implemented for xcuda"));
+    PADDLE_ENFORCE_GPU_SUCCESS(phi::dynload::cublasDscal(args...));
   }
 
   template <typename... ARGS>
   static void VCOPY(ARGS... args) {
-    // PADDLE_ENFORCE_GPU_SUCCESS(cublasDcopy(args...));
-    PADDLE_THROW(common::errors::Unimplemented(
-        "cublasDcopy is not implemented for xcuda"));
+    PADDLE_ENFORCE_GPU_SUCCESS(phi::dynload::cublasDcopy(args...));
   }
 
   template <typename... ARGS>
@@ -307,14 +301,13 @@ struct CUBlas<double> {
 
   template <typename... ARGS>
   static void GETRI_BATCH(ARGS... args) {
-    PADDLE_THROW(phi::errors::Unimplemented("GETRI_BATCH is not supported by xtrans. upgrade"));
-    // PADDLE_ENFORCE_GPU_SUCCESS(phi::dynload::cublasDgetriBatched(args...));
+    PADDLE_ENFORCE_GPU_SUCCESS(phi::dynload::cublasDgetriBatched(args...));
   }
 
   template <typename... ARGS>
   static void MATINV_BATCH(ARGS... args) {
-    PADDLE_THROW(phi::errors::Unimplemented("DmatinvBatched is not supported by xtrans."));
-	  // PADDLE_ENFORCE_GPU_SUCCESS(phi::dynload::cublasDmatinvBatched(args...));
+    PADDLE_THROW(phi::errors::Unimplemented(
+        "DmatinvBatched is not supported by xtrans."));
   }
 
   template <typename... ARGS>
@@ -324,8 +317,7 @@ struct CUBlas<double> {
 
   template <typename... ARGS>
   static void TRSM_BATCH(ARGS... args) {
-    PADDLE_THROW(phi::errors::Unimplemented("cublasDtrsmBatched is not supported by xtrans."));
-	  // PADDLE_ENFORCE_GPU_SUCCESS(phi::dynload::cublasDtrsmBatched(args...));
+    PADDLE_ENFORCE_GPU_SUCCESS(phi::dynload::cublasDtrsmBatched(args...));
   }
 
   template <typename... ARGS>
@@ -352,6 +344,9 @@ struct CUBlas<phi::float16> {
                    const float16 *beta,
                    float16 *C,
                    int ldc) {
+    // xtrans cublasHgemm returns CUBLAS_STATUS_INVALID_VALUE in API
+    // verification, so the original call remains disabled instead of using the
+    // removed dynload API.
     // PADDLE_ENFORCE_GPU_SUCCESS(
     //     phi::dynload::cublasHgemm(handle,
     //                               transa,
@@ -367,21 +362,23 @@ struct CUBlas<phi::float16> {
     //                               reinterpret_cast<const __half *>(beta),
     //                               reinterpret_cast<__half *>(C),
     //                               ldc));
-    PADDLE_ENFORCE_GPU_SUCCESS(
-        phi::dynload::cublasHgemm(handle,
-                                  transa,
-                                  transb,
-                                  m,
-                                  n,
-                                  k,
-                                  (const cublasHalf*)alpha,
-                                  (const cublasHalf*)A,
-                                  lda,
-                                  (const cublasHalf*)B,
-                                  ldb,
-                                  (const cublasHalf*)beta,
-                                  (cublasHalf*)C,
-                                  ldc));
+    // PADDLE_ENFORCE_GPU_SUCCESS(
+    //     phi::dynload::cublasHgemm(handle,
+    //                               transa,
+    //                               transb,
+    //                               m,
+    //                               n,
+    //                               k,
+    //                               (const cublasHalf*)alpha,
+    //                               (const cublasHalf*)A,
+    //                               lda,
+    //                               (const cublasHalf*)B,
+    //                               ldb,
+    //                               (const cublasHalf*)beta,
+    //                               (cublasHalf*)C,
+    //                               ldc));
+    PADDLE_THROW(common::errors::Unimplemented(
+        "cublasHgemm is not supported by xtrans."));
   }
 
 #if defined(__NVCC__) || defined(__CUDACC__) || defined(__CUDACC__)
@@ -418,27 +415,32 @@ struct CUBlas<phi::float16> {
     thrust::device_vector<const void *> B_ptr(B, B + batchCount);
     thrust::device_vector<void *> C_ptr(C, C + batchCount);
     dev_ctx->TensorCoreCublasCallIfAvailable([&](cublasHandle_t handle) {
-      PADDLE_ENFORCE_GPU_SUCCESS(
-          phi::dynload::cublasGemmBatchedEx(handle,
-                                            transa,
-                                            transb,
-                                            m,
-                                            n,
-                                            k,
-                                            alpha,
-                                            A_ptr.data().get(),
-                                            Atype,
-                                            lda,
-                                            B_ptr.data().get(),
-                                            Btype,
-                                            ldb,
-                                            beta,
-                                            C_ptr.data().get(),
-                                            Ctype,
-                                            ldc,
-                                            batchCount,
-                                            computeType,
-                                            algo));
+      // xtrans cublasGemmBatchedEx returns success but does not write output,
+      // so the original call remains disabled instead of using the removed
+      // dynload API.
+      // PADDLE_ENFORCE_GPU_SUCCESS(
+      //     phi::dynload::cublasGemmBatchedEx(handle,
+      //                                       transa,
+      //                                       transb,
+      //                                       m,
+      //                                       n,
+      //                                       k,
+      //                                       alpha,
+      //                                       A_ptr.data().get(),
+      //                                       Atype,
+      //                                       lda,
+      //                                       B_ptr.data().get(),
+      //                                       Btype,
+      //                                       ldb,
+      //                                       beta,
+      //                                       C_ptr.data().get(),
+      //                                       Ctype,
+      //                                       ldc,
+      //                                       batchCount,
+      //                                       computeType,
+      //                                       algo));
+      PADDLE_THROW(common::errors::Unimplemented(
+          "cublasGemmBatchedEx is not supported by xtrans."));
     });
 #else
     PADDLE_THROW(common::errors::Unimplemented(
@@ -466,6 +468,9 @@ struct CUBlas<phi::float16> {
                                  long long int strideC,  // NOLINT
                                  int batchCount) {
 #if CUDA_VERSION >= 8000
+    // xtrans cublasHgemmStridedBatched returns CUBLAS_STATUS_INVALID_VALUE in
+    // API verification, so the original call remains disabled instead of using
+    // the removed dynload API.
     // PADDLE_ENFORCE_GPU_SUCCESS(phi::dynload::cublasHgemmStridedBatched(
     //     handle,
     //     transa,
@@ -485,25 +490,27 @@ struct CUBlas<phi::float16> {
     //     ldc,
     //     strideC,
     //     batchCount));
-    PADDLE_ENFORCE_GPU_SUCCESS(phi::dynload::cublasHgemmStridedBatched(
-        handle,
-        transa,
-        transb,
-        m,
-        n,
-        k,
-        (const cublasHalf*)alpha,
-        (const cublasHalf*)A,
-        lda,
-        strideA,
-        (const cublasHalf*)B,
-        ldb,
-        strideB,
-        (const cublasHalf*)beta,
-        (cublasHalf*)C,
-        ldc,
-        strideC,
-        batchCount));
+    // PADDLE_ENFORCE_GPU_SUCCESS(phi::dynload::cublasHgemmStridedBatched(
+    //     handle,
+    //     transa,
+    //     transb,
+    //     m,
+    //     n,
+    //     k,
+    //     (const cublasHalf*)alpha,
+    //     (const cublasHalf*)A,
+    //     lda,
+    //     strideA,
+    //     (const cublasHalf*)B,
+    //     ldb,
+    //     strideB,
+    //     (const cublasHalf*)beta,
+    //     (cublasHalf*)C,
+    //     ldc,
+    //     strideC,
+    //     batchCount));
+    PADDLE_THROW(common::errors::Unimplemented(
+        "cublasHgemmStridedBatched is not supported by xtrans."));
 #else
     PADDLE_THROW(common::errors::Unimplemented(
         "HgemmStridedBatched is not supported on cuda <= 7.5"));
@@ -543,25 +550,29 @@ struct CUBlas<phi::float16> {
 #endif  // CUDA_VERSION >= 9000
 
     dev_ctx->TensorCoreCublasCallIfAvailable([&](cublasHandle_t handle) {
-      PADDLE_ENFORCE_GPU_SUCCESS(phi::dynload::cublasGemmEx(handle,
-                                                            transa,
-                                                            transb,
-                                                            m,
-                                                            n,
-                                                            k,
-                                                            alpha,
-                                                            A,
-                                                            Atype,
-                                                            lda,
-                                                            B,
-                                                            Btype,
-                                                            ldb,
-                                                            beta,
-                                                            C,
-                                                            Ctype,
-                                                            ldc,
-                                                            computeType,
-                                                            algo));
+      // xtrans cublasGemmEx returns success but does not write output, so the
+      // original call remains disabled instead of using the removed dynload API.
+      // PADDLE_ENFORCE_GPU_SUCCESS(phi::dynload::cublasGemmEx(handle,
+      //                                                        transa,
+      //                                                        transb,
+      //                                                        m,
+      //                                                        n,
+      //                                                        k,
+      //                                                        alpha,
+      //                                                        A,
+      //                                                        Atype,
+      //                                                        lda,
+      //                                                        B,
+      //                                                        Btype,
+      //                                                        ldb,
+      //                                                        beta,
+      //                                                        C,
+      //                                                        Ctype,
+      //                                                        ldc,
+      //                                                        computeType,
+      //                                                        algo));
+      PADDLE_THROW(common::errors::Unimplemented(
+          "cublasGemmEx is not supported by xtrans."));
     });
 #else
     PADDLE_THROW(common::errors::Unimplemented(
@@ -597,26 +608,30 @@ struct CUBlas<phi::float16> {
     VLOG(5) << "use_tensor_op_math: "
             << (use_tensor_op_math ? "True" : "False");
     dev_ctx->TensorCoreCublasCallIfAvailable([&](cublasHandle_t handle) {
-      PADDLE_ENFORCE_GPU_SUCCESS(
-          phi::dynload::cublasGemmEx_64(handle,
-                                        transa,
-                                        transb,
-                                        m,
-                                        n,
-                                        k,
-                                        alpha,
-                                        A,
-                                        Atype,
-                                        lda,
-                                        B,
-                                        Btype,
-                                        ldb,
-                                        beta,
-                                        C,
-                                        Ctype,
-                                        ldc,
-                                        migratedComputeType,
-                                        algo));
+      // xtrans cublasGemmEx_64 is a success-only empty stub, so the original
+      // call remains disabled instead of using the removed dynload API.
+      // PADDLE_ENFORCE_GPU_SUCCESS(
+      //     phi::dynload::cublasGemmEx_64(handle,
+      //                                   transa,
+      //                                   transb,
+      //                                   m,
+      //                                   n,
+      //                                   k,
+      //                                   alpha,
+      //                                   A,
+      //                                   Atype,
+      //                                   lda,
+      //                                   B,
+      //                                   Btype,
+      //                                   ldb,
+      //                                   beta,
+      //                                   C,
+      //                                   Ctype,
+      //                                   ldc,
+      //                                   migratedComputeType,
+      //                                   algo));
+      PADDLE_THROW(common::errors::Unimplemented(
+          "cublasGemmEx_64 is not supported by xtrans."));
     });
 #else
     PADDLE_THROW(common::errors::Unimplemented(
@@ -681,15 +696,14 @@ struct CUBlas<phi::complex64> {
                    const int incX,
                    phi::complex64 *Y,
                    const int incY) {
-    PADDLE_THROW(phi::errors::Unimplemented("Complex AXPY is not supported by xtrans yet."));
-      //PADDLE_ENFORCE_GPU_SUCCESS(phi::dynload::cublasCaxpy(
-    //    handle,
-    //    n,
-    //    reinterpret_cast<const cuFloatComplex *>(alpha),
-    //    reinterpret_cast<const cuFloatComplex *>(X),
-    //    incX,
-    //    reinterpret_cast<cuFloatComplex *>(Y),
-    //    incY));
+    PADDLE_ENFORCE_GPU_SUCCESS(phi::dynload::cublasCaxpy(
+        handle,
+        n,
+        reinterpret_cast<const cuFloatComplex *>(alpha),
+        reinterpret_cast<const cuFloatComplex *>(X),
+        incX,
+        reinterpret_cast<cuFloatComplex *>(Y),
+        incY));
   }
 
   static void GEMM_STRIDED_BATCH(cublasHandle_t handle,
@@ -827,25 +841,29 @@ struct CUBlas<phi::complex64> {
 #endif  // CUDA_VERSION >= 9000
 
     dev_ctx->TensorCoreCublasCallIfAvailable([&](cublasHandle_t handle) {
-      PADDLE_ENFORCE_GPU_SUCCESS(phi::dynload::cublasGemmEx(handle,
-                                                            transa,
-                                                            transb,
-                                                            m,
-                                                            n,
-                                                            k,
-                                                            alpha,
-                                                            A,
-                                                            Atype,
-                                                            lda,
-                                                            B,
-                                                            Btype,
-                                                            ldb,
-                                                            beta,
-                                                            C,
-                                                            Ctype,
-                                                            ldc,
-                                                            computeType,
-                                                            algo));
+      // xtrans cublasGemmEx returns success but does not write output, so the
+      // original call remains disabled instead of using the removed dynload API.
+      // PADDLE_ENFORCE_GPU_SUCCESS(phi::dynload::cublasGemmEx(handle,
+      //                                                        transa,
+      //                                                        transb,
+      //                                                        m,
+      //                                                        n,
+      //                                                        k,
+      //                                                        alpha,
+      //                                                        A,
+      //                                                        Atype,
+      //                                                        lda,
+      //                                                        B,
+      //                                                        Btype,
+      //                                                        ldb,
+      //                                                        beta,
+      //                                                        C,
+      //                                                        Ctype,
+      //                                                        ldc,
+      //                                                        computeType,
+      //                                                        algo));
+      PADDLE_THROW(common::errors::Unimplemented(
+          "cublasGemmEx is not supported by xtrans."));
     });
 #else
     PADDLE_THROW(common::errors::Unimplemented(
@@ -881,26 +899,30 @@ struct CUBlas<phi::complex64> {
             << (use_tensor_op_math ? "True" : "False");
     cublasComputeType_t migratedComputeType = CUBLAS_COMPUTE_32F;
     dev_ctx->TensorCoreCublasCallIfAvailable([&](cublasHandle_t handle) {
-      PADDLE_ENFORCE_GPU_SUCCESS(
-          phi::dynload::cublasGemmEx_64(handle,
-                                        transa,
-                                        transb,
-                                        m,
-                                        n,
-                                        k,
-                                        alpha,
-                                        A,
-                                        Atype,
-                                        lda,
-                                        B,
-                                        Btype,
-                                        ldb,
-                                        beta,
-                                        C,
-                                        Ctype,
-                                        ldc,
-                                        migratedComputeType,
-                                        algo));
+      // xtrans cublasGemmEx_64 is a success-only empty stub, so the original
+      // call remains disabled instead of using the removed dynload API.
+      // PADDLE_ENFORCE_GPU_SUCCESS(
+      //     phi::dynload::cublasGemmEx_64(handle,
+      //                                   transa,
+      //                                   transb,
+      //                                   m,
+      //                                   n,
+      //                                   k,
+      //                                   alpha,
+      //                                   A,
+      //                                   Atype,
+      //                                   lda,
+      //                                   B,
+      //                                   Btype,
+      //                                   ldb,
+      //                                   beta,
+      //                                   C,
+      //                                   Ctype,
+      //                                   ldc,
+      //                                   migratedComputeType,
+      //                                   algo));
+      PADDLE_THROW(common::errors::Unimplemented(
+          "cublasGemmEx_64 is not supported by xtrans."));
     });
 #else
     PADDLE_THROW(common::errors::Unimplemented(
@@ -1008,16 +1030,8 @@ struct CUBlas<phi::complex64> {
                            int lda_inv,
                            int *info,
                            int batch_size) {
-    PADDLE_THROW(phi::errors::Unimplemented("Complex MATINV_BATCH is not supported by xtrans yet."));
-      // PADDLE_ENFORCE_GPU_SUCCESS(phi::dynload::cublasCmatinvBatched(
-      //  handle,
-      //  n,
-      //  reinterpret_cast<const cuFloatComplex **>(A),
-      //  lda,
-      //  reinterpret_cast<cuFloatComplex **>(Ainv),
-      //  lda_inv,
-      //  info,
-      //  batch_size));
+    PADDLE_THROW(phi::errors::Unimplemented(
+        "Complex MATINV_BATCH is not supported by xtrans yet."));
   }
 
   static void DOT(cublasHandle_t handle,
@@ -1074,15 +1088,14 @@ struct CUBlas<phi::complex128> {
                    const int incX,
                    phi::complex128 *Y,
                    const int incY) {
-    PADDLE_THROW(phi::errors::Unimplemented("Complex AXPY is not supported by xtrans yet."));
-    // PADDLE_ENFORCE_GPU_SUCCESS(phi::dynload::cublasZaxpy(
-    //     handle,
-    //     n,
-    //     reinterpret_cast<const cuDoubleComplex *>(alpha),
-    //     reinterpret_cast<const cuDoubleComplex *>(X),
-    //     incX,
-    //     reinterpret_cast<cuDoubleComplex *>(Y),
-    //     incY));
+    PADDLE_ENFORCE_GPU_SUCCESS(phi::dynload::cublasZaxpy(
+        handle,
+        n,
+        reinterpret_cast<const cuDoubleComplex *>(alpha),
+        reinterpret_cast<const cuDoubleComplex *>(X),
+        incX,
+        reinterpret_cast<cuDoubleComplex *>(Y),
+        incY));
   }
 
   static void GEMM_STRIDED_BATCH(cublasHandle_t handle,
@@ -1263,25 +1276,29 @@ struct CUBlas<phi::complex128> {
 #endif  // CUDA_VERSION >= 9000
 
     dev_ctx->TensorCoreCublasCallIfAvailable([&](cublasHandle_t handle) {
-      PADDLE_ENFORCE_GPU_SUCCESS(phi::dynload::cublasGemmEx(handle,
-                                                            transa,
-                                                            transb,
-                                                            m,
-                                                            n,
-                                                            k,
-                                                            alpha,
-                                                            A,
-                                                            Atype,
-                                                            lda,
-                                                            B,
-                                                            Btype,
-                                                            ldb,
-                                                            beta,
-                                                            C,
-                                                            Ctype,
-                                                            ldc,
-                                                            computeType,
-                                                            algo));
+      // xtrans cublasGemmEx returns success but does not write output, so the
+      // original call remains disabled instead of using the removed dynload API.
+      // PADDLE_ENFORCE_GPU_SUCCESS(phi::dynload::cublasGemmEx(handle,
+      //                                                        transa,
+      //                                                        transb,
+      //                                                        m,
+      //                                                        n,
+      //                                                        k,
+      //                                                        alpha,
+      //                                                        A,
+      //                                                        Atype,
+      //                                                        lda,
+      //                                                        B,
+      //                                                        Btype,
+      //                                                        ldb,
+      //                                                        beta,
+      //                                                        C,
+      //                                                        Ctype,
+      //                                                        ldc,
+      //                                                        computeType,
+      //                                                        algo));
+      PADDLE_THROW(common::errors::Unimplemented(
+          "cublasGemmEx is not supported by xtrans."));
     });
 #else
     PADDLE_THROW(common::errors::Unimplemented(
@@ -1317,26 +1334,30 @@ struct CUBlas<phi::complex128> {
             << (use_tensor_op_math ? "True" : "False");
     cublasComputeType_t migratedComputeType = CUBLAS_COMPUTE_32F;
     dev_ctx->TensorCoreCublasCallIfAvailable([&](cublasHandle_t handle) {
-      PADDLE_ENFORCE_GPU_SUCCESS(
-          phi::dynload::cublasGemmEx_64(handle,
-                                        transa,
-                                        transb,
-                                        m,
-                                        n,
-                                        k,
-                                        alpha,
-                                        A,
-                                        Atype,
-                                        lda,
-                                        B,
-                                        Btype,
-                                        ldb,
-                                        beta,
-                                        C,
-                                        Ctype,
-                                        ldc,
-                                        migratedComputeType,
-                                        algo));
+      // xtrans cublasGemmEx_64 is a success-only empty stub, so the original
+      // call remains disabled instead of using the removed dynload API.
+      // PADDLE_ENFORCE_GPU_SUCCESS(
+      //     phi::dynload::cublasGemmEx_64(handle,
+      //                                   transa,
+      //                                   transb,
+      //                                   m,
+      //                                   n,
+      //                                   k,
+      //                                   alpha,
+      //                                   A,
+      //                                   Atype,
+      //                                   lda,
+      //                                   B,
+      //                                   Btype,
+      //                                   ldb,
+      //                                   beta,
+      //                                   C,
+      //                                   Ctype,
+      //                                   ldc,
+      //                                   migratedComputeType,
+      //                                   algo));
+      PADDLE_THROW(common::errors::Unimplemented(
+          "cublasGemmEx_64 is not supported by xtrans."));
     });
 #else
     PADDLE_THROW(common::errors::Unimplemented(
@@ -1401,16 +1422,8 @@ struct CUBlas<phi::complex128> {
                            int lda_inv,
                            int *info,
                            int batch_size) {
-      PADDLE_THROW(phi::errors::Unimplemented("Complex MATINV_BATCH is not supported by xtrans yet."));
-      //PADDLE_ENFORCE_GPU_SUCCESS(phi::dynload::cublasZmatinvBatched(
-    //    handle,
-    //    n,
-    //    reinterpret_cast<const cuDoubleComplex **>(A),
-    //    lda,
-    //    reinterpret_cast<cuDoubleComplex **>(Ainv),
-    //    lda_inv,
-    //    info,
-    //    batch_size));
+    PADDLE_THROW(phi::errors::Unimplemented(
+        "Complex MATINV_BATCH is not supported by xtrans yet."));
   }
 
   static void DOT(cublasHandle_t handle,
@@ -1893,26 +1906,30 @@ inline void Blas<phi::GPUContext>::GEMM(CBLAS_TRANSPOSE transA,
 #if 1 || (CUDA_VERSION >= 12030 && defined(__linux__))
     cublasComputeType_t migratedComputeType = CUBLAS_COMPUTE_32F;
     dev_ctx_.TensorCoreCublasCallIfAvailable([&](cublasHandle_t handle) {
-      PADDLE_ENFORCE_GPU_SUCCESS(
-          phi::dynload::cublasGemmEx_64(handle,
-                                        cuTransB,
-                                        cuTransA,
-                                        N,
-                                        M,
-                                        K,
-                                        &h_alpha,
-                                        B,
-                                        CUDA_R_16BF,
-                                        ldb,
-                                        A,
-                                        CUDA_R_16BF,
-                                        lda,
-                                        &h_beta,
-                                        C,
-                                        CUDA_R_16BF,
-                                        N,
-                                        migratedComputeType,
-                                        algo));
+      // xtrans cublasGemmEx_64 is a success-only empty stub, so the original
+      // call remains disabled instead of using the removed dynload API.
+      // PADDLE_ENFORCE_GPU_SUCCESS(
+      //     phi::dynload::cublasGemmEx_64(handle,
+      //                                   cuTransB,
+      //                                   cuTransA,
+      //                                   N,
+      //                                   M,
+      //                                   K,
+      //                                   &h_alpha,
+      //                                   B,
+      //                                   CUDA_R_16BF,
+      //                                   ldb,
+      //                                   A,
+      //                                   CUDA_R_16BF,
+      //                                   lda,
+      //                                   &h_beta,
+      //                                   C,
+      //                                   CUDA_R_16BF,
+      //                                   N,
+      //                                   migratedComputeType,
+      //                                   algo));
+      PADDLE_THROW(common::errors::Unimplemented(
+          "cublasGemmEx_64 is not supported by xtrans."));
     });
 #else
     PADDLE_THROW(common::errors::Unimplemented(
@@ -1921,26 +1938,30 @@ inline void Blas<phi::GPUContext>::GEMM(CBLAS_TRANSPOSE transA,
   } else {
     CheckGEMMNSize(N);
     dev_ctx_.TensorCoreCublasCallIfAvailable([&](cublasHandle_t handle) {
-      PADDLE_ENFORCE_GPU_SUCCESS(
-          phi::dynload::cublasGemmEx(handle,
-                                     cuTransB,
-                                     cuTransA,
-                                     static_cast<int>(N),
-                                     static_cast<int>(M),
-                                     static_cast<int>(K),
-                                     &h_alpha,
-                                     B,
-                                     CUDA_R_16BF,
-                                     static_cast<int>(ldb),
-                                     A,
-                                     CUDA_R_16BF,
-                                     static_cast<int>(lda),
-                                     &h_beta,
-                                     C,
-                                     CUDA_R_16BF,
-                                     static_cast<int>(N),
-                                     CUDA_R_32F,
-                                     algo));
+      // xtrans cublasGemmEx returns success but does not write output, so the
+      // original call remains disabled instead of using the removed dynload API.
+      // PADDLE_ENFORCE_GPU_SUCCESS(
+      //     phi::dynload::cublasGemmEx(handle,
+      //                                cuTransB,
+      //                                cuTransA,
+      //                                static_cast<int>(N),
+      //                                static_cast<int>(M),
+      //                                static_cast<int>(K),
+      //                                &h_alpha,
+      //                                B,
+      //                                CUDA_R_16BF,
+      //                                static_cast<int>(ldb),
+      //                                A,
+      //                                CUDA_R_16BF,
+      //                                static_cast<int>(lda),
+      //                                &h_beta,
+      //                                C,
+      //                                CUDA_R_16BF,
+      //                                static_cast<int>(N),
+      //                                CUDA_R_32F,
+      //                                algo));
+      PADDLE_THROW(common::errors::Unimplemented(
+          "cublasGemmEx is not supported by xtrans."));
     });
   }
 #else
@@ -1994,26 +2015,30 @@ inline void Blas<phi::GPUContext>::GEMM(CBLAS_TRANSPOSE transA,
 #if 1 || (CUDA_VERSION >= 12030 && defined(__linux__))
     cublasComputeType_t migratedComputeType = CUBLAS_COMPUTE_32F;
     dev_ctx_.TensorCoreCublasCallIfAvailable([&](cublasHandle_t handle) {
-      PADDLE_ENFORCE_GPU_SUCCESS(
-          phi::dynload::cublasGemmEx_64(handle,
-                                        cuTransB,
-                                        cuTransA,
-                                        N,
-                                        M,
-                                        K,
-                                        &h_alpha,
-                                        B,
-                                        CUDA_R_16BF,
-                                        ldb,
-                                        A,
-                                        CUDA_R_16BF,
-                                        lda,
-                                        &h_beta,
-                                        C,
-                                        CUDA_R_16BF,
-                                        N,
-                                        migratedComputeType,
-                                        algo));
+      // xtrans cublasGemmEx_64 is a success-only empty stub, so the original
+      // call remains disabled instead of using the removed dynload API.
+      // PADDLE_ENFORCE_GPU_SUCCESS(
+      //     phi::dynload::cublasGemmEx_64(handle,
+      //                                   cuTransB,
+      //                                   cuTransA,
+      //                                   N,
+      //                                   M,
+      //                                   K,
+      //                                   &h_alpha,
+      //                                   B,
+      //                                   CUDA_R_16BF,
+      //                                   ldb,
+      //                                   A,
+      //                                   CUDA_R_16BF,
+      //                                   lda,
+      //                                   &h_beta,
+      //                                   C,
+      //                                   CUDA_R_16BF,
+      //                                   N,
+      //                                   migratedComputeType,
+      //                                   algo));
+      PADDLE_THROW(common::errors::Unimplemented(
+          "cublasGemmEx_64 is not supported by xtrans."));
     });
 #else
     PADDLE_THROW(common::errors::Unimplemented(
@@ -2022,26 +2047,30 @@ inline void Blas<phi::GPUContext>::GEMM(CBLAS_TRANSPOSE transA,
   } else {
     CheckGEMMNSize(N);
     dev_ctx_.TensorCoreCublasCallIfAvailable([&](cublasHandle_t handle) {
-      PADDLE_ENFORCE_GPU_SUCCESS(
-          phi::dynload::cublasGemmEx(handle,
-                                     cuTransB,
-                                     cuTransA,
-                                     static_cast<int>(N),
-                                     static_cast<int>(M),
-                                     static_cast<int>(K),
-                                     &h_alpha,
-                                     B,
-                                     CUDA_R_16BF,
-                                     static_cast<int>(ldb),
-                                     A,
-                                     CUDA_R_16BF,
-                                     static_cast<int>(lda),
-                                     &h_beta,
-                                     C,
-                                     CUDA_R_16BF,
-                                     static_cast<int>(N),
-                                     CUDA_R_32F,
-                                     algo));
+      // xtrans cublasGemmEx returns success but does not write output, so the
+      // original call remains disabled instead of using the removed dynload API.
+      // PADDLE_ENFORCE_GPU_SUCCESS(
+      //     phi::dynload::cublasGemmEx(handle,
+      //                                cuTransB,
+      //                                cuTransA,
+      //                                static_cast<int>(N),
+      //                                static_cast<int>(M),
+      //                                static_cast<int>(K),
+      //                                &h_alpha,
+      //                                B,
+      //                                CUDA_R_16BF,
+      //                                static_cast<int>(ldb),
+      //                                A,
+      //                                CUDA_R_16BF,
+      //                                static_cast<int>(lda),
+      //                                &h_beta,
+      //                                C,
+      //                                CUDA_R_16BF,
+      //                                static_cast<int>(N),
+      //                                CUDA_R_32F,
+      //                                algo));
+      PADDLE_THROW(common::errors::Unimplemented(
+          "cublasGemmEx is not supported by xtrans."));
     });
   }
 #else
@@ -2363,25 +2392,29 @@ inline void Blas<phi::GPUContext>::GEMM(bool transA,
   }
   CheckGEMMNSize(N);
   dev_ctx_.TensorCoreCublasCallIfAvailable([&](cublasHandle_t handle) {
-    PADDLE_ENFORCE_GPU_SUCCESS(phi::dynload::cublasGemmEx(handle,
-                                                          cuTransB,
-                                                          cuTransA,
-                                                          N,
-                                                          M,
-                                                          K,
-                                                          &h_alpha,
-                                                          B,
-                                                          CUDA_R_16F,
-                                                          ldb,
-                                                          A,
-                                                          CUDA_R_16F,
-                                                          lda,
-                                                          &h_beta,
-                                                          C,
-                                                          CUDA_R_16F,
-                                                          ldc,
-                                                          CUDA_R_32F,
-                                                          algo));
+    // xtrans cublasGemmEx returns success but does not write output, so the
+    // original call remains disabled instead of using the removed dynload API.
+    // PADDLE_ENFORCE_GPU_SUCCESS(phi::dynload::cublasGemmEx(handle,
+    //                                                       cuTransB,
+    //                                                       cuTransA,
+    //                                                       N,
+    //                                                       M,
+    //                                                       K,
+    //                                                       &h_alpha,
+    //                                                       B,
+    //                                                       CUDA_R_16F,
+    //                                                       ldb,
+    //                                                       A,
+    //                                                       CUDA_R_16F,
+    //                                                       lda,
+    //                                                       &h_beta,
+    //                                                       C,
+    //                                                       CUDA_R_16F,
+    //                                                       ldc,
+    //                                                       CUDA_R_32F,
+    //                                                       algo));
+    PADDLE_THROW(common::errors::Unimplemented(
+        "cublasGemmEx is not supported by xtrans."));
   });
 }
 
@@ -2425,25 +2458,29 @@ inline void Blas<phi::GPUContext>::GEMM(bool transA,
 
   CheckGEMMNSize(N);
   dev_ctx_.TensorCoreCublasCallIfAvailable([&](cublasHandle_t handle) {
-    PADDLE_ENFORCE_GPU_SUCCESS(phi::dynload::cublasGemmEx(handle,
-                                                          cuTransB,
-                                                          cuTransA,
-                                                          N,
-                                                          M,
-                                                          K,
-                                                          &h_alpha,
-                                                          B,
-                                                          CUDA_R_16BF,
-                                                          ldb,
-                                                          A,
-                                                          CUDA_R_16BF,
-                                                          lda,
-                                                          &h_beta,
-                                                          C,
-                                                          CUDA_R_16BF,
-                                                          ldc,
-                                                          CUDA_R_32F,
-                                                          algo));
+    // xtrans cublasGemmEx returns success but does not write output, so the
+    // original call remains disabled instead of using the removed dynload API.
+    // PADDLE_ENFORCE_GPU_SUCCESS(phi::dynload::cublasGemmEx(handle,
+    //                                                       cuTransB,
+    //                                                       cuTransA,
+    //                                                       N,
+    //                                                       M,
+    //                                                       K,
+    //                                                       &h_alpha,
+    //                                                       B,
+    //                                                       CUDA_R_16BF,
+    //                                                       ldb,
+    //                                                       A,
+    //                                                       CUDA_R_16BF,
+    //                                                       lda,
+    //                                                       &h_beta,
+    //                                                       C,
+    //                                                       CUDA_R_16BF,
+    //                                                       ldc,
+    //                                                       CUDA_R_32F,
+    //                                                       algo));
+    PADDLE_THROW(common::errors::Unimplemented(
+        "cublasGemmEx is not supported by xtrans."));
   });
 #else
   // raise error
@@ -2628,38 +2665,46 @@ void Blas<phi::GPUContext>::BatchedGEMM(CBLAS_TRANSPOSE transA,
     if (M > INT_MAX_VALUE || N > INT_MAX_VALUE || K > INT_MAX_VALUE) {
 #if 1 || (CUDA_VERSION >= 12030 && defined(__linux__))
       dev_ctx_.TensorCoreCublasCallIfAvailable([&](cublasHandle_t handle) {
-        PADDLE_ENFORCE_GPU_SUCCESS(
-            phi::dynload::cublasGemmStridedBatchedEx_64(handle,
-                                                        cuTransB,
-                                                        cuTransA,
-                                                        N,
-                                                        M,
-                                                        K,
-                                                        a,
-                                                        B,
-                                                        fp,
-                                                        ldb,
-                                                        strideB,
-                                                        A,
-                                                        fp,
-                                                        lda,
-                                                        strideA,
-                                                        b,
-                                                        C,
-                                                        fp,
-                                                        ldc,
-                                                        strideC,
-                                                        batchCount,
-                                                        compute_type,
-                                                        algo));
+        // xtrans cublasGemmStridedBatchedEx_64 is a success-only empty stub,
+        // so the original call remains disabled instead of using the removed
+        // dynload API.
+        // PADDLE_ENFORCE_GPU_SUCCESS(
+        //     phi::dynload::cublasGemmStridedBatchedEx_64(handle,
+        //                                                 cuTransB,
+        //                                                 cuTransA,
+        //                                                 N,
+        //                                                 M,
+        //                                                 K,
+        //                                                 a,
+        //                                                 B,
+        //                                                 fp,
+        //                                                 ldb,
+        //                                                 strideB,
+        //                                                 A,
+        //                                                 fp,
+        //                                                 lda,
+        //                                                 strideA,
+        //                                                 b,
+        //                                                 C,
+        //                                                 fp,
+        //                                                 ldc,
+        //                                                 strideC,
+        //                                                 batchCount,
+        //                                                 compute_type,
+        //                                                 algo));
+        PADDLE_THROW(common::errors::Unimplemented(
+            "cublasGemmStridedBatchedEx_64 is not supported by xtrans."));
       });
 #else
       PADDLE_THROW(common::errors::Unimplemented(
           "cublasGemmStridedBatchedEx_64 is not supported on cuda < 12.3"));
 #endif  // CUDA_VERSION >= 12030
     } else {
-	 PADDLE_THROW(common::errors::Unimplemented(
-          "cublasGemmStridedBatchedEx_64 is not supported "));
+      // xtrans cublasGemmStridedBatchedEx returns success but does not write
+      // output, so the original call remains disabled instead of using the
+      // removed dynload API.
+      // PADDLE_THROW(common::errors::Unimplemented(
+      //     "cublasGemmStridedBatchedEx_64 is not supported "));
       // dev_ctx_.TensorCoreCublasCallIfAvailable([&](cublasHandle_t handle) {
       //   PADDLE_ENFORCE_GPU_SUCCESS(phi::dynload::cublasGemmStridedBatchedEx(
       //       handle,
@@ -2686,6 +2731,8 @@ void Blas<phi::GPUContext>::BatchedGEMM(CBLAS_TRANSPOSE transA,
       //       compute_type,
       //       algo));
       // });
+      PADDLE_THROW(common::errors::Unimplemented(
+          "cublasGemmStridedBatchedEx is not supported by xtrans."));
     }
   } else {
 #endif  // CUDA_VERSION >= 9010
@@ -2808,38 +2855,46 @@ void Blas<phi::GPUContext>::BatchedGEMM(CBLAS_TRANSPOSE transA,
         batchCount > INT_MAX_VALUE) {
 #if 1 || (CUDA_VERSION >= 12030 && defined(__linux__))
       dev_ctx_.TensorCoreCublasCallIfAvailable([&](cublasHandle_t handle) {
-        PADDLE_ENFORCE_GPU_SUCCESS(
-            phi::dynload::cublasGemmStridedBatchedEx_64(handle,
-                                                        cuTransB,
-                                                        cuTransA,
-                                                        N,
-                                                        M,
-                                                        K,
-                                                        a,
-                                                        B,
-                                                        fp,
-                                                        ldb,
-                                                        strideB,
-                                                        A,
-                                                        fp,
-                                                        lda,
-                                                        strideA,
-                                                        b,
-                                                        C,
-                                                        fp,
-                                                        ldc,
-                                                        strideC,
-                                                        batchCount,
-                                                        compute_type,
-                                                        algo));
+        // xtrans cublasGemmStridedBatchedEx_64 is a success-only empty stub,
+        // so the original call remains disabled instead of using the removed
+        // dynload API.
+        // PADDLE_ENFORCE_GPU_SUCCESS(
+        //     phi::dynload::cublasGemmStridedBatchedEx_64(handle,
+        //                                                 cuTransB,
+        //                                                 cuTransA,
+        //                                                 N,
+        //                                                 M,
+        //                                                 K,
+        //                                                 a,
+        //                                                 B,
+        //                                                 fp,
+        //                                                 ldb,
+        //                                                 strideB,
+        //                                                 A,
+        //                                                 fp,
+        //                                                 lda,
+        //                                                 strideA,
+        //                                                 b,
+        //                                                 C,
+        //                                                 fp,
+        //                                                 ldc,
+        //                                                 strideC,
+        //                                                 batchCount,
+        //                                                 compute_type,
+        //                                                 algo));
+        PADDLE_THROW(common::errors::Unimplemented(
+            "cublasGemmStridedBatchedEx_64 is not supported by xtrans."));
       });
 #else
       PADDLE_THROW(common::errors::Unimplemented(
           "cublasGemmStridedBatchedEx_64 is not supported on cuda < 12.3"));
 #endif  // CUDA_VERSION >= 12030
     } else {
-      PADDLE_THROW(common::errors::Unimplemented(
-          "cublasGemmStridedBatchedEx is not supported."));
+      // xtrans cublasGemmStridedBatchedEx returns success but does not write
+      // output, so the original call remains disabled instead of using the
+      // removed dynload API.
+      // PADDLE_THROW(common::errors::Unimplemented(
+      //     "cublasGemmStridedBatchedEx is not supported."));
       // dev_ctx_.TensorCoreCublasCallIfAvailable([&](cublasHandle_t handle) {
       //   PADDLE_ENFORCE_GPU_SUCCESS(phi::dynload::cublasGemmStridedBatchedEx(
       //       handle,
@@ -2866,6 +2921,8 @@ void Blas<phi::GPUContext>::BatchedGEMM(CBLAS_TRANSPOSE transA,
       //       compute_type,
       //       algo));
       // });
+      PADDLE_THROW(common::errors::Unimplemented(
+          "cublasGemmStridedBatchedEx is not supported by xtrans."));
     }
   } else {
 #endif  // CUDA_VERSION >= 9010
@@ -2939,30 +2996,35 @@ inline void Blas<phi::GPUContext>::BatchedGEMM(CBLAS_TRANSPOSE transA,
       batchCount > INT_MAX_VALUE) {
 #if 1 || (CUDA_VERSION >= 12030 && defined(__linux__))
     dev_ctx_.TensorCoreCublasCallIfAvailable([&](cublasHandle_t handle) {
-      PADDLE_ENFORCE_GPU_SUCCESS(
-          phi::dynload::cublasGemmStridedBatchedEx_64(handle,
-                                                      cuTransB,
-                                                      cuTransA,
-                                                      N,
-                                                      M,
-                                                      K,
-                                                      &h_alpha,
-                                                      B,
-                                                      CUDA_R_16BF,
-                                                      ldb,
-                                                      strideB,
-                                                      A,
-                                                      CUDA_R_16BF,
-                                                      lda,
-                                                      strideA,
-                                                      &h_beta,
-                                                      C,
-                                                      CUDA_R_16BF,
-                                                      ldc,
-                                                      strideC,
-                                                      batchCount,
-                                                      CUBLAS_COMPUTE_32F,
-                                                      algo));
+      // xtrans cublasGemmStridedBatchedEx_64 is a success-only empty stub, so
+      // the original call remains disabled instead of using the removed dynload
+      // API.
+      // PADDLE_ENFORCE_GPU_SUCCESS(
+      //     phi::dynload::cublasGemmStridedBatchedEx_64(handle,
+      //                                                 cuTransB,
+      //                                                 cuTransA,
+      //                                                 N,
+      //                                                 M,
+      //                                                 K,
+      //                                                 &h_alpha,
+      //                                                 B,
+      //                                                 CUDA_R_16BF,
+      //                                                 ldb,
+      //                                                 strideB,
+      //                                                 A,
+      //                                                 CUDA_R_16BF,
+      //                                                 lda,
+      //                                                 strideA,
+      //                                                 &h_beta,
+      //                                                 C,
+      //                                                 CUDA_R_16BF,
+      //                                                 ldc,
+      //                                                 strideC,
+      //                                                 batchCount,
+      //                                                 CUBLAS_COMPUTE_32F,
+      //                                                 algo));
+      PADDLE_THROW(common::errors::Unimplemented(
+          "cublasGemmStridedBatchedEx_64 is not supported by xtrans."));
     });
 #else
     PADDLE_THROW(common::errors::Unimplemented(
@@ -2970,30 +3032,35 @@ inline void Blas<phi::GPUContext>::BatchedGEMM(CBLAS_TRANSPOSE transA,
 #endif  // CUDA_VERSION >= 12030
   } else {
     dev_ctx_.TensorCoreCublasCallIfAvailable([&](cublasHandle_t handle) {
-      PADDLE_ENFORCE_GPU_SUCCESS(
-          phi::dynload::cublasGemmStridedBatchedEx(handle,
-                                                   cuTransB,
-                                                   cuTransA,
-                                                   static_cast<int>(N),
-                                                   static_cast<int>(M),
-                                                   static_cast<int>(K),
-                                                   &h_alpha,
-                                                   B,
-                                                   CUDA_R_16BF,
-                                                   static_cast<int>(ldb),
-                                                   strideB,
-                                                   A,
-                                                   CUDA_R_16BF,
-                                                   static_cast<int>(lda),
-                                                   strideA,
-                                                   &h_beta,
-                                                   C,
-                                                   CUDA_R_16BF,
-                                                   static_cast<int>(ldc),
-                                                   strideC,
-                                                   static_cast<int>(batchCount),
-                                                   (cudaDataType_t)CUBLAS_COMPUTE_32F,
-                                                   algo));
+      // xtrans cublasGemmStridedBatchedEx returns success but does not write
+      // output, so the original call remains disabled instead of using the
+      // removed dynload API.
+      // PADDLE_ENFORCE_GPU_SUCCESS(
+      //     phi::dynload::cublasGemmStridedBatchedEx(handle,
+      //                                              cuTransB,
+      //                                              cuTransA,
+      //                                              static_cast<int>(N),
+      //                                              static_cast<int>(M),
+      //                                              static_cast<int>(K),
+      //                                              &h_alpha,
+      //                                              B,
+      //                                              CUDA_R_16BF,
+      //                                              static_cast<int>(ldb),
+      //                                              strideB,
+      //                                              A,
+      //                                              CUDA_R_16BF,
+      //                                              static_cast<int>(lda),
+      //                                              strideA,
+      //                                              &h_beta,
+      //                                              C,
+      //                                              CUDA_R_16BF,
+      //                                              static_cast<int>(ldc),
+      //                                              strideC,
+      //                                              static_cast<int>(batchCount),
+      //                                              (cudaDataType_t)CUBLAS_COMPUTE_32F,
+      //                                              algo));
+      PADDLE_THROW(common::errors::Unimplemented(
+          "cublasGemmStridedBatchedEx is not supported by xtrans."));
     });
   }
 #else
@@ -3044,30 +3111,35 @@ inline void Blas<phi::GPUContext>::BatchedGEMM(CBLAS_TRANSPOSE transA,
       batchCount > INT_MAX_VALUE) {
 #if 1 || (CUDA_VERSION >= 12030 && defined(__linux__))
     dev_ctx_.TensorCoreCublasCallIfAvailable([&](cublasHandle_t handle) {
-      PADDLE_ENFORCE_GPU_SUCCESS(
-          phi::dynload::cublasGemmStridedBatchedEx_64(handle,
-                                                      cuTransB,
-                                                      cuTransA,
-                                                      N,
-                                                      M,
-                                                      K,
-                                                      &h_alpha,
-                                                      B,
-                                                      CUDA_R_16BF,
-                                                      ldb,
-                                                      strideB,
-                                                      A,
-                                                      CUDA_R_16BF,
-                                                      lda,
-                                                      strideA,
-                                                      &h_beta,
-                                                      C,
-                                                      CUDA_R_16BF,
-                                                      ldc,
-                                                      strideC,
-                                                      batchCount,
-                                                      CUBLAS_COMPUTE_32F,
-                                                      algo));
+      // xtrans cublasGemmStridedBatchedEx_64 is a success-only empty stub, so
+      // the original call remains disabled instead of using the removed dynload
+      // API.
+      // PADDLE_ENFORCE_GPU_SUCCESS(
+      //     phi::dynload::cublasGemmStridedBatchedEx_64(handle,
+      //                                                 cuTransB,
+      //                                                 cuTransA,
+      //                                                 N,
+      //                                                 M,
+      //                                                 K,
+      //                                                 &h_alpha,
+      //                                                 B,
+      //                                                 CUDA_R_16BF,
+      //                                                 ldb,
+      //                                                 strideB,
+      //                                                 A,
+      //                                                 CUDA_R_16BF,
+      //                                                 lda,
+      //                                                 strideA,
+      //                                                 &h_beta,
+      //                                                 C,
+      //                                                 CUDA_R_16BF,
+      //                                                 ldc,
+      //                                                 strideC,
+      //                                                 batchCount,
+      //                                                 CUBLAS_COMPUTE_32F,
+      //                                                 algo));
+      PADDLE_THROW(common::errors::Unimplemented(
+          "cublasGemmStridedBatchedEx_64 is not supported by xtrans."));
     });
 #else
     PADDLE_THROW(common::errors::Unimplemented(
@@ -3075,30 +3147,35 @@ inline void Blas<phi::GPUContext>::BatchedGEMM(CBLAS_TRANSPOSE transA,
 #endif  // CUDA_VERSION >= 12030
   } else {
     dev_ctx_.TensorCoreCublasCallIfAvailable([&](cublasHandle_t handle) {
-      PADDLE_ENFORCE_GPU_SUCCESS(
-          phi::dynload::cublasGemmStridedBatchedEx(handle,
-                                                   cuTransB,
-                                                   cuTransA,
-                                                   static_cast<int>(N),
-                                                   static_cast<int>(M),
-                                                   static_cast<int>(K),
-                                                   &h_alpha,
-                                                   B,
-                                                   CUDA_R_16BF,
-                                                   static_cast<int>(ldb),
-                                                   strideB,
-                                                   A,
-                                                   CUDA_R_16BF,
-                                                   static_cast<int>(lda),
-                                                   strideA,
-                                                   &h_beta,
-                                                   C,
-                                                   CUDA_R_16BF,
-                                                   static_cast<int>(ldc),
-                                                   strideC,
-                                                   static_cast<int>(batchCount),
-                                                  (cudaDataType_t)CUBLAS_COMPUTE_32F,
-                                                   algo));
+      // xtrans cublasGemmStridedBatchedEx returns success but does not write
+      // output, so the original call remains disabled instead of using the
+      // removed dynload API.
+      // PADDLE_ENFORCE_GPU_SUCCESS(
+      //     phi::dynload::cublasGemmStridedBatchedEx(handle,
+      //                                              cuTransB,
+      //                                              cuTransA,
+      //                                              static_cast<int>(N),
+      //                                              static_cast<int>(M),
+      //                                              static_cast<int>(K),
+      //                                              &h_alpha,
+      //                                              B,
+      //                                              CUDA_R_16BF,
+      //                                              static_cast<int>(ldb),
+      //                                              strideB,
+      //                                              A,
+      //                                              CUDA_R_16BF,
+      //                                              static_cast<int>(lda),
+      //                                              strideA,
+      //                                              &h_beta,
+      //                                              C,
+      //                                              CUDA_R_16BF,
+      //                                              static_cast<int>(ldc),
+      //                                              strideC,
+      //                                              static_cast<int>(batchCount),
+      //                                              (cudaDataType_t)CUBLAS_COMPUTE_32F,
+      //                                              algo));
+      PADDLE_THROW(common::errors::Unimplemented(
+          "cublasGemmStridedBatchedEx is not supported by xtrans."));
     });
   }
 #else
@@ -3319,27 +3396,32 @@ inline void Blas<phi::GPUContext>::BatchedGEMM(CBLAS_TRANSPOSE transA,
   thrust::device_vector<const void *> B_ptr(B, B + batchCount);
   thrust::device_vector<void *> C_ptr(C, C + batchCount);
   dev_ctx_.TensorCoreCublasCallIfAvailable([&](cublasHandle_t handle) {
-    PADDLE_ENFORCE_GPU_SUCCESS(
-        phi::dynload::cublasGemmBatchedEx(handle,
-                                          cuTransB,
-                                          cuTransA,
-                                          N,
-                                          M,
-                                          K,
-                                          &f_alpha,
-                                          B_ptr.data().get(),
-                                          CUDA_R_16BF,
-                                          ldb,
-                                          A_ptr.data().get(),
-                                          CUDA_R_16BF,
-                                          lda,
-                                          &f_beta,
-                                          C_ptr.data().get(),
-                                          CUDA_R_16BF,
-                                          ldc,
-                                          batchCount,
-                                          CUDA_R_32F,
-                                          algo));
+    // xtrans cublasGemmBatchedEx returns success but does not write output, so
+    // the original call remains disabled instead of using the removed dynload
+    // API.
+    // PADDLE_ENFORCE_GPU_SUCCESS(
+    //     phi::dynload::cublasGemmBatchedEx(handle,
+    //                                       cuTransB,
+    //                                       cuTransA,
+    //                                       N,
+    //                                       M,
+    //                                       K,
+    //                                       &f_alpha,
+    //                                       B_ptr.data().get(),
+    //                                       CUDA_R_16BF,
+    //                                       ldb,
+    //                                       A_ptr.data().get(),
+    //                                       CUDA_R_16BF,
+    //                                       lda,
+    //                                       &f_beta,
+    //                                       C_ptr.data().get(),
+    //                                       CUDA_R_16BF,
+    //                                       ldc,
+    //                                       batchCount,
+    //                                       CUDA_R_32F,
+    //                                       algo));
+    PADDLE_THROW(common::errors::Unimplemented(
+        "cublasGemmBatchedEx is not supported by xtrans."));
   });
 #else
   // raise error

@@ -103,25 +103,29 @@ void CublasGemm(cublasHandle_t cublas_handle,
   constexpr float alpha = 1.0f, beta = 0.0f;
 
   if constexpr (std::is_same<T, phi::bfloat16>::value) {
-    CUBLAS_CALL(phi::dynload::cublasGemmEx(cublas_handle,
-                                           transpose_b,
-                                           transpose_a,
-                                           m,
-                                           n,
-                                           k,
-                                           &alpha,
-                                           b,
-                                           CUDA_R_16BF,
-                                           ldb,
-                                           a,
-                                           CUDA_R_16BF,
-                                           lda,
-                                           &beta,
-                                           c,
-                                           CUDA_R_16BF,
-                                           c_cols,
-                                           CUDA_R_32F,
-                                           CUBLAS_GEMM_DEFAULT));
+    // xtrans cublasGemmEx returns success but does not write output, so the
+    // original call remains disabled instead of using the removed dynload API.
+    // CUBLAS_CALL(phi::dynload::cublasGemmEx(cublas_handle,
+    //                                        transpose_b,
+    //                                        transpose_a,
+    //                                        m,
+    //                                        n,
+    //                                        k,
+    //                                        &alpha,
+    //                                        b,
+    //                                        CUDA_R_16BF,
+    //                                        ldb,
+    //                                        a,
+    //                                        CUDA_R_16BF,
+    //                                        lda,
+    //                                        &beta,
+    //                                        c,
+    //                                        CUDA_R_16BF,
+    //                                        c_cols,
+    //                                        CUDA_R_32F,
+    //                                        CUBLAS_GEMM_DEFAULT));
+    PADDLE_THROW(common::errors::Unimplemented(
+        "cublasGemmEx is not supported by xtrans."));
   } else if constexpr (std::is_same<T, float>::value) {
     CUBLAS_CALL(phi::dynload::cublasSgemm_v2(cublas_handle,
                                           transpose_b,

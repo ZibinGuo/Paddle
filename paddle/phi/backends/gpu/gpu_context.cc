@@ -400,8 +400,11 @@ struct GPUContext::Impl {
         } else {
           blas_tensor_core_handle_ = blas_tensor_core_handle_creator_();
         }
-        PADDLE_RETRY_CUDA_SUCCESS(phi::dynload::cublasSetMathMode(
-            blas_tensor_core_handle_, CUBLAS_TENSOR_OP_MATH));
+        // xtrans cublasSetMathMode/GetMathMode fail verification, so the
+        // original math-mode call remains disabled instead of using the removed
+        // dynload API.
+        // PADDLE_RETRY_CUDA_SUCCESS(phi::dynload::cublasSetMathMode(
+        //     blas_tensor_core_handle_, CUBLAS_TENSOR_OP_MATH));
       }
       if (!blas_tf32_tensor_core_handle_) {
         if (!blas_tf32_tensor_core_handle_creator_) {
@@ -410,8 +413,11 @@ struct GPUContext::Impl {
           blas_tf32_tensor_core_handle_ =
               blas_tf32_tensor_core_handle_creator_();
         }
-        PADDLE_RETRY_CUDA_SUCCESS(phi::dynload::cublasSetMathMode(
-            blas_tf32_tensor_core_handle_, CUBLAS_TF32_TENSOR_OP_MATH));
+        // xtrans cublasSetMathMode/GetMathMode fail verification, so the
+        // original math-mode call remains disabled instead of using the removed
+        // dynload API.
+        // PADDLE_RETRY_CUDA_SUCCESS(phi::dynload::cublasSetMathMode(
+        //     blas_tf32_tensor_core_handle_, CUBLAS_TF32_TENSOR_OP_MATH));
       }
 #endif
     });
@@ -613,8 +619,11 @@ struct GPUContext::Impl {
         } else {
           blas_tensor_core_handle_ = blas_tensor_core_handle_creator_();
         }
-        PADDLE_RETRY_CUDA_SUCCESS(phi::dynload::cublasSetMathMode(
-            blas_tensor_core_handle_, CUBLAS_TENSOR_OP_MATH));
+        // xtrans cublasSetMathMode/GetMathMode fail verification, so the
+        // original math-mode call remains disabled instead of using the removed
+        // dynload API.
+        // PADDLE_RETRY_CUDA_SUCCESS(phi::dynload::cublasSetMathMode(
+        //     blas_tensor_core_handle_, CUBLAS_TENSOR_OP_MATH));
       }
       if (!blas_tf32_tensor_core_handle_) {
         if (!blas_tf32_tensor_core_handle_creator_) {
@@ -623,8 +632,11 @@ struct GPUContext::Impl {
           blas_tf32_tensor_core_handle_ =
               blas_tf32_tensor_core_handle_creator_();
         }
-        PADDLE_RETRY_CUDA_SUCCESS(phi::dynload::cublasSetMathMode(
-            blas_tf32_tensor_core_handle_, CUBLAS_TF32_TENSOR_OP_MATH));
+        // xtrans cublasSetMathMode/GetMathMode fail verification, so the
+        // original math-mode call remains disabled instead of using the removed
+        // dynload API.
+        // PADDLE_RETRY_CUDA_SUCCESS(phi::dynload::cublasSetMathMode(
+        //     blas_tf32_tensor_core_handle_, CUBLAS_TF32_TENSOR_OP_MATH));
       }
 #endif
     });
@@ -654,8 +666,11 @@ struct GPUContext::Impl {
         } else {
           blas_tensor_core_handle_ = blas_tensor_core_handle_creator_();
         }
-        PADDLE_RETRY_CUDA_SUCCESS(phi::dynload::cublasSetMathMode(
-            blas_tensor_core_handle_, CUBLAS_TENSOR_OP_MATH));
+        // xtrans cublasSetMathMode/GetMathMode fail verification, so the
+        // original math-mode call remains disabled instead of using the removed
+        // dynload API.
+        // PADDLE_RETRY_CUDA_SUCCESS(phi::dynload::cublasSetMathMode(
+        //     blas_tensor_core_handle_, CUBLAS_TENSOR_OP_MATH));
       }
       if (!blas_tf32_tensor_core_handle_) {
         if (!blas_tf32_tensor_core_handle_creator_) {
@@ -664,8 +679,11 @@ struct GPUContext::Impl {
           blas_tf32_tensor_core_handle_ =
               blas_tf32_tensor_core_handle_creator_();
         }
-        PADDLE_RETRY_CUDA_SUCCESS(phi::dynload::cublasSetMathMode(
-            blas_tf32_tensor_core_handle_, CUBLAS_TF32_TENSOR_OP_MATH));
+        // xtrans cublasSetMathMode/GetMathMode fail verification, so the
+        // original math-mode call remains disabled instead of using the removed
+        // dynload API.
+        // PADDLE_RETRY_CUDA_SUCCESS(phi::dynload::cublasSetMathMode(
+        //     blas_tf32_tensor_core_handle_, CUBLAS_TF32_TENSOR_OP_MATH));
       }
 #endif
     });

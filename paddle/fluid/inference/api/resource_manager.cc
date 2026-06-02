@@ -280,8 +280,10 @@ GPUContextResource::GetBlasTensorCoreHandleCreator() {
 #ifdef PADDLE_WITH_CUDA
 #if CUDA_VERSION >= 9000
     phi::InitBlasHandle(&blas_tensor_core_handle_, stream_);
-    PADDLE_RETRY_CUDA_SUCCESS(phi::dynload::cublasSetMathMode(
-        blas_tensor_core_handle_, CUBLAS_TENSOR_OP_MATH));
+    // xtrans cublasSetMathMode/GetMathMode fail verification, so the original
+    // math-mode call remains disabled instead of using the removed dynload API.
+    // PADDLE_RETRY_CUDA_SUCCESS(phi::dynload::cublasSetMathMode(
+    //     blas_tensor_core_handle_, CUBLAS_TENSOR_OP_MATH));
 #endif
 #endif
     return blas_tensor_core_handle_;
@@ -298,8 +300,10 @@ GPUContextResource::GetBlasTF32TensorCoreHandleCreator() {
 #ifdef PADDLE_WITH_CUDA
 #if CUDA_VERSION >= 11000
     phi::InitBlasHandle(&blas_tf32_tensor_core_handle_, stream_);
-    PADDLE_RETRY_CUDA_SUCCESS(phi::dynload::cublasSetMathMode(
-        blas_tf32_tensor_core_handle_, CUBLAS_TF32_TENSOR_OP_MATH));
+    // xtrans cublasSetMathMode/GetMathMode fail verification, so the original
+    // math-mode call remains disabled instead of using the removed dynload API.
+    // PADDLE_RETRY_CUDA_SUCCESS(phi::dynload::cublasSetMathMode(
+    //     blas_tf32_tensor_core_handle_, CUBLAS_TF32_TENSOR_OP_MATH));
 #endif
 #endif
     return blas_tf32_tensor_core_handle_;
