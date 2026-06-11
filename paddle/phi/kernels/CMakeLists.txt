@@ -45,6 +45,93 @@ file(
   RELATIVE "${CMAKE_CURRENT_SOURCE_DIR}"
   "gpu/*.cu" "gpu/*.cu.cc")
 
+# ---------------------------------------------------------------------------
+# xpu_cada override:
+#   On m100 (xtrans), some GPU kernels can be replaced with hand-tuned
+#   implementations placed under paddle/phi/kernels/xpu_cada/<subdir>/. The
+#   replacements still register under Backend::GPU, so the upper dispatch path
+#   is unchanged. We do compile-time replacement here (instead of relying on
+#   PD_REGISTER_KERNEL silently overwriting at runtime, which is order-
+#   dependent and unsafe across translation units).
+#
+#   Layout convention (mirror gpu-side directory tree):
+#     xpu_cada/                  -> overrides for kernels/gpu/*.cu(.cc)
+#     xpu_cada/gpudnn/           -> overrides for kernels/gpudnn/*.cu
+#     xpu_cada/sparse/gpu/       -> overrides for kernels/sparse/gpu/*.cu
+#     xpu_cada/legacy/gpu/       -> overrides for kernels/legacy/gpu/*.cu
+#     xpu_cada/fusion/gpu/       -> overrides for kernels/fusion/gpu/*.cu
+#     xpu_cada/strings/gpu/      -> overrides for kernels/strings/gpu/*.cu
+#     xpu_cada/selected_rows/gpu/-> overrides for kernels/selected_rows/gpu/*.cu
+#     xpu_cada/stride/           -> overrides for kernels/stride/*.cu
+#     xpu_cada/kps/              -> overrides for kernels/kps/*.cu
+#
+#   Same basename as the file you want to replace. Same kernel name &
+#   PD_REGISTER_KERNEL(name, GPU, ...) registration as the original.
+# ---------------------------------------------------------------------------
+function(_xpu_cada_override list_var override_subdir mirrored_subdir)
+  # Collect override files (relative to current source dir).
+  file(
+    GLOB _override_files
+    RELATIVE "${CMAKE_CURRENT_SOURCE_DIR}"
+    "${override_subdir}/*.cu" "${override_subdir}/*.cu.cc")
+  if(NOT _override_files)
+    return()
+  endif()
+
+  # Build the basename set provided by xpu_cada/<override_subdir>/.
+  set(_override_basenames "")
+  foreach(_f ${_override_files})
+    get_filename_component(_n "${_f}" NAME)
+    list(APPEND _override_basenames "${_n}")
+  endforeach()
+
+  # Drop entries from the original list whose path lives under
+  # ${mirrored_subdir}/ AND whose basename is shadowed by an override.
+  set(_kept "")
+  foreach(_orig ${${list_var}})
+    set(_drop FALSE)
+    string(FIND "${_orig}" "${mirrored_subdir}/" _pos)
+    if(_pos EQUAL 0)
+      get_filename_component(_on "${_orig}" NAME)
+      if(_on IN_LIST _override_basenames)
+        message(STATUS
+          "[xpu_cada] override ${mirrored_subdir}/${_on} -> ${override_subdir}/${_on}")
+        set(_drop TRUE)
+      endif()
+    endif()
+    if(NOT _drop)
+      list(APPEND _kept "${_orig}")
+    endif()
+  endforeach()
+
+  # Append the override files so they take part in collect_srcs / kernel_declare.
+  list(APPEND _kept ${_override_files})
+  set(${list_var} "${_kept}" PARENT_SCOPE)
+endfunction()
+
+if(WITH_XPU_CADA)
+  if(NOT WITH_GPU)
+    message(FATAL_ERROR
+      "WITH_XPU_CADA requires WITH_GPU=ON (xpu_cada kernels register under Backend::GPU).")
+  endif()
+
+  # gpu/ -> xpu_cada/  (top-level GPU kernels, the most common case)
+  _xpu_cada_override(kernel_gpu "xpu_cada"               "gpu")
+
+  # Also support overriding files that currently live in kernel_cu's
+  # sub-directories. Add new pairs here when needed.
+  _xpu_cada_override(kernel_cu  "xpu_cada/gpudnn"          "gpudnn")
+  _xpu_cada_override(kernel_cu  "xpu_cada/kps"             "kps")
+  _xpu_cada_override(kernel_cu  "xpu_cada/stride"          "stride")
+  _xpu_cada_override(kernel_cu  "xpu_cada/legacy/gpu"      "legacy/gpu")
+  _xpu_cada_override(kernel_cu  "xpu_cada/legacy/kps"      "legacy/kps")
+  _xpu_cada_override(kernel_cu  "xpu_cada/selected_rows/gpu" "selected_rows/gpu")
+  _xpu_cada_override(kernel_cu  "xpu_cada/sparse/gpu"      "sparse/gpu")
+  _xpu_cada_override(kernel_cu  "xpu_cada/strings/gpu"     "strings/gpu")
+  _xpu_cada_override(kernel_cu  "xpu_cada/fusion/gpu"      "fusion/gpu")
+endif()
+# ---------------------------------------------------------------------------
+
 if(APPLE OR WIN32)
   list(REMOVE_ITEM kernel_cu "fusion/gpu/fusion_group_kernel.cu")
   list(REMOVE_ITEM kernel_cu "sparse/gpu/conv_kernel_igemm.cu")

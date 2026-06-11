@@ -60,6 +60,11 @@ option(WITH_XPU_PLUGIN "Compile PaddlePaddle with BAIDU XPU plugin" OFF)
 option(WITH_XPU_XRE5 "Compile PaddlePaddle with BAIDU XPU XRE 5" OFF)
 option(WITH_XPU_FFT "Compile PaddlePaddle with BAIDU XPU FFT" ${WITH_XPU})
 option(WITH_MAGMA "Compile PaddlePaddle with Magma library" OFF)
+option(WITH_XPU_CADA
+       "Override selected GPU kernels with m100 xpu_cada implementations" OFF)
+if(WITH_XPU_CADA)
+  add_definitions(-DPADDLE_WITH_XPU_CADA)
+endif()
 option(
   WITH_SLEEF
   "Compile PaddlePaddle with Sleef library for high precision math functions"

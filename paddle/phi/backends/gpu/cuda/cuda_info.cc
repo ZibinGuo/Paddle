@@ -256,7 +256,17 @@ void SetDeviceId(int id) {
                           id,
                           GetGPUDeviceCount()));
 
-    PADDLE_RETRY_CUDA_SUCCESS(cudaSetDevice(id));
+    // xtrans/XPUSIM workaround: the first cudaSetDevice triggers the
+    // simulator's lazy `set_device_id_and_init` (export.cpp:1774). That path
+    // unconditionally returns cudaErrorNotSupported(801) and leaves 801 in
+    // the per-thread CUDA error slot, even though the device is in fact
+    // set successfully. Any retry (PADDLE_RETRY_CUDA_SUCCESS, manual loop)
+    // re-enters set_device_id_and_init, which corrupts HBM allocator state
+    // and causes later cudaMalloc to fail with "allocated memory space is
+    // out of mem range for HBM". So: call cudaSetDevice exactly once,
+    // ignore its return value, and drain the sticky error.
+    (void)cudaSetDevice(id);
+    (void)cudaGetLastError();
     VLOG(4) << "SetDeviceId " << id;
     first_call = false;
     return;
